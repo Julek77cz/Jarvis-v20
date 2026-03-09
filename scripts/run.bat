@@ -33,9 +33,9 @@ echo ║                                                               ║
 echo ╚═════════════════════════════════════════════════════╝
 echo.
 
-set "PROJECT_DIR=%~dp0"
-set "PROJECT_DIR=%PROJECT_DIR:~0,-1%"
-cd /d "%PROJECT_DIR%"
+set "SCRIPT_DIR=%~dp0"
+cd /d "%SCRIPT_DIR%.."
+set "PROJECT_DIR=%CD%"
 
 :: 1. Auto-update
 echo [*] Kontroluji aktualizace z GitHubu...

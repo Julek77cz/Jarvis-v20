@@ -6,9 +6,9 @@ setlocal
 ::  JARVIS V19 - Ultimate Auto-Updating Launcher
 :: ═══════════════════════════════════════════════════════════════════════
 
-set "PROJECT_DIR=%~dp0"
-if "%PROJECT_DIR:~-1%"=="\" set "PROJECT_DIR=%PROJECT_DIR:~0,-1%"
-cd /d "%PROJECT_DIR%"
+set "SCRIPT_DIR=%~dp0"
+cd /d "%SCRIPT_DIR%.."
+set "PROJECT_DIR=%CD%"
 
 echo.
 echo ╔═══════════════════════════════════════════════════════════════════════╗

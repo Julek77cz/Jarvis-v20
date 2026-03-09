@@ -7,8 +7,9 @@ setlocal
 ::  🤖 JARVIS V20 - STATE-OF-THE-ART AI AGENT
 :: ══════════════════════════════════════════════════════════
 
-set "PROJECT_DIR=%~dp0"
-cd /d "%PROJECT_DIR%"
+set "SCRIPT_DIR=%~dp0"
+cd /d "%SCRIPT_DIR%.."
+set "PROJECT_DIR=%CD%"
 
 echo.
 echo ╔═══════════════════════════════════════════════════════════╗

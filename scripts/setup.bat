@@ -20,9 +20,9 @@ echo ========================================
 pause
 
 :: --- Configuration ----------------------------------------------------
-set "PROJECT_DIR=%~dp0"
-if "%PROJECT_DIR:~-1%"=="\" set "PROJECT_DIR=%PROJECT_DIR:~0,-1%"
-cd /d "%PROJECT_DIR%" 2>&1
+set "SCRIPT_DIR=%~dp0"
+cd /d "%SCRIPT_DIR%.."
+set "PROJECT_DIR=%CD%"
 if !errorlevel! neq 0 (
     call :echo_color "%RED%" "ERROR: Cannot change to project directory: %PROJECT_DIR%"
     echo Error code: !errorlevel!
