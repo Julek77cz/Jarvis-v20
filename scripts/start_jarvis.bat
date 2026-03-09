@@ -4,13 +4,18 @@ setlocal EnableExtensions EnableDelayedExpansion
 
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%.."
+if errorlevel 1 (
+    echo [ERR] Nepodarilo se zmenit adresar
+    pause
+    exit /b 1
+)
+
 set "PROJECT_DIR=%CD%"
 set "OLLAMA_URL=http://localhost:11434"
 set "GIT_REMOTE_URL=https://github.com/Julek77cz/Jarvis-v20.git"
 
-for /f %%a in ('powershell -NoProfile -Command "$esc=[char]27; Write-Output $esc"') do set "ESC=%%a"
-if not defined ESC set "ESC="
-
+:: Direct ANSI escape codes (ASCII 27)
+for /f %%a in ('echo prompt $E ^| cmd') do set "ESC=%%a"
 set "RESET=%ESC%[0m"
 set "RED=%ESC%[91m"
 set "GREEN=%ESC%[92m"
@@ -23,15 +28,15 @@ set "WHITE=%ESC%[97m"
 goto :main
 
 :echo_color
-echo(%~1%~2%RESET%
+echo %~1%~2%RESET%
 goto :eof
 
 :print_banner
 echo.
 call :echo_color "%CYAN%" "[JARVIS]"
-call :echo_color "%MAGENTA%" "╔══════════════════════════════════════════════════════════════════════╗"
-call :echo_color "%MAGENTA%" "║  JARVIS V20 - Smart start for your AI assistant                    ║"
-call :echo_color "%MAGENTA%" "╚══════════════════════════════════════════════════════════════════════╝"
+call :echo_color "%MAGENTA%" "+======================================================================+"
+call :echo_color "%MAGENTA%" "|  JARVIS V20 - Smart start for your AI assistant                      |"
+call :echo_color "%MAGENTA%" "+======================================================================+"
 call :echo_color "%CYAN%" "[INFO] Initializing brain | Syncing repo | Checking Ollama"
 echo.
 goto :eof
@@ -49,13 +54,13 @@ if exist "%PROJECT_DIR%\.git" (
         call :echo_color "%GREEN%" "[OK] Repo je synchronizovane."
     )
 ) else (
-    call :echo_color "%YELLOW%" "[WARN] .git adresar nebyl nalezen. Preskakuji aktualizaci z GitHubu."
+    call :echo_color "%YELLOW%" "[WARN] .git adresar nebyl nalezen."
 )
 echo.
 
 python --version >nul 2>&1
 if errorlevel 1 (
-    call :echo_color "%RED%" "[ERR] Python neni nainstalovany nebo neni v PATH."
+    call :echo_color "%RED%" "[ERR] Python neni nainstalovany."
     pause
     exit /b 1
 )
@@ -65,14 +70,14 @@ if exist "%PROJECT_DIR%\.venv\Scripts\activate.bat" (
     call :echo_color "%BLUE%" "[VENV] Aktivuji virtualni prostredi..."
     call "%PROJECT_DIR%\.venv\Scripts\activate.bat"
     call :echo_color "%BLUE%" "[PIP] Kontroluji zavislosti..."
-    python -m pip install -r requirements.txt -q
+    python -m pip install -r requirements.txt -q 2>nul
     if errorlevel 1 (
-        call :echo_color "%YELLOW%" "[WARN] Nepodarilo se overit vsechny zavislosti. Pokracuji..."
+        call :echo_color "%YELLOW%" "[WARN] Nepodarilo se overit zavislosti."
     ) else (
-        call :echo_color "%GREEN%" "[OK] Zavislosti jsou aktualni."
+        call :echo_color "%GREEN%" "[OK] Zavislosti OK."
     )
 ) else (
-    call :echo_color "%RED%" "[ERR] Virtualni prostredi nebylo nalezeno. Nejdriv spust scripts\setup.bat."
+    call :echo_color "%RED%" "[ERR] Virtualni prostredi nenalezeno."
     pause
     exit /b 1
 )
@@ -81,30 +86,32 @@ echo.
 call :echo_color "%BLUE%" "[OLLAMA] Kontroluji Ollamu..."
 curl -s %OLLAMA_URL%/api/tags >nul 2>&1
 if errorlevel 1 (
-    call :echo_color "%YELLOW%" "[WARN] Ollama nebezi. Startuji ji na pozadi..."
-    start "" ollama serve
+    call :echo_color "%YELLOW%" "[WARN] Ollama nebezi. Startuji..."
+    start /B "" ollama serve >nul 2>&1
     timeout /t 5 /nobreak >nul
     curl -s %OLLAMA_URL%/api/tags >nul 2>&1
     if errorlevel 1 (
-        call :echo_color "%RED%" "[ERR] Ollama stale neodpovida. Zkontroluj instalaci."
+        call :echo_color "%RED%" "[ERR] Ollama neodpovida."
         pause
         exit /b 1
     )
 )
 call :echo_color "%GREEN%" "[OK] Ollama je pripravena."
 echo.
-call :echo_color "%CYAN%" "[RUN] Startuji Mozek JARVIS... Hodne stesti!"
-call :echo_color "%CYAN%" "══════════════════════════════════════════════════════════════════════"
+call :echo_color "%CYAN%" "[RUN] Startuji Mozek JARVIS..."
+call :echo_color "%CYAN%" "======================================================================"
 echo.
 
 python main.py %*
-if errorlevel 1 (
+set "EXIT_CODE=%ERRORLEVEL%"
+
+if %EXIT_CODE% neq 0 (
     echo.
-    call :echo_color "%RED%" "[FAIL] JARVIS skoncil s chybovym kodem %errorlevel%."
-    call :echo_color "%YELLOW%" "[TIP] Mrkni na logy a zkus pripadne znovu scripts\setup.bat."
+    call :echo_color "%RED%" "[FAIL] JARVIS skoncil s chybou %EXIT_CODE%."
     pause
-    exit /b 1
+    exit /b %EXIT_CODE%
 )
 
 echo.
 call :echo_color "%GREEN%" "[DONE] JARVIS byl ukoncen korektne."
+exit /b 0

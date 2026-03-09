@@ -122,6 +122,7 @@ class ReActLoopV2:
                             "sub_goal": sub_goal,
                         },
                         decision_confidence=action.get("confidence", 0.7),
+                        decision_rationale=f"Reasoning step {iteration} with sub-goal: {sub_goal or 'none'}",
                     )
 
                 # Execute tool
