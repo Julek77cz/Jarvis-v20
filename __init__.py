@@ -14,7 +14,7 @@ Complete rewrite with:
 import logging
 from typing import Optional, Callable
 
-from jarvis_v20.orchestrator import JarvisV20
+from orchestrator import JarvisV20
 
 logger = logging.getLogger("JARVIS.V20")
 

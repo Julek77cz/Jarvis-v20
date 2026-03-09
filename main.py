@@ -3,7 +3,8 @@
 import sys
 import argparse
 import logging
-from __init__ import JarvisV20, get_version
+from orchestrator import JarvisV20
+from __init__ import get_version
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("JARVIS.V20.LAUNCHER")
