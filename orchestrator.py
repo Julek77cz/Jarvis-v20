@@ -10,11 +10,11 @@ from jarvis_config import (
 )
 from jarvis_memory import CognitiveMemory
 from jarvis_tools import create_tool_class, TOOLS_SCHEMA
-from jarvis_v20.planning.hierarchical_planner import HierarchicalPlanner
-from jarvis_v20.reasoning.react_v2 import ReActLoopV2
-from jarvis_v20.reasoning.metacognition import MetacognitiveLayer
-from jarvis_v20.tools.parallel_executor import ParallelToolExecutor
-from jarvis_v20.swarm_v2.swarm_v2 import SwarmManagerV2
+from planning.hierarchical_planner import HierarchicalPlanner
+from reasoning.react_v2 import ReActLoopV2
+from reasoning.metacognition import MetacognitiveLayer
+from tools.parallel_executor import ParallelToolExecutor
+from swarm_v2.swarm_v2 import SwarmManagerV2
 
 logger = logging.getLogger("JARVIS.V20.ORCHESTRATOR")
 
@@ -184,7 +184,7 @@ class JarvisV20:
         Returns:
             Explanation in Czech
         """
-        from jarvis_v20.tools.explainability import ExplainableAILayer
+        from tools.explainability import ExplainableAILayer
 
         xai = ExplainableAILayer(self._get_bridge(), self.metacognition)
         return xai.explain_reasoning(query)

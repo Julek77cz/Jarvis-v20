@@ -2,7 +2,7 @@
 
 Implements hierarchical planning with backtracking.
 """
-from jarvis_v20.planning.hierarchical_planner import (
+from planning.hierarchical_planner import (
     HierarchicalPlanner,
     PlanningNode,
     ExecutionPath,

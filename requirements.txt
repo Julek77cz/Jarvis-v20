@@ -13,4 +13,4 @@ networkx>=3.2.0
 
 # V20 Additions
 numpy>=1.24.0  # For statistical calculations
-concurrent-futures>=3.4.0  # For parallel execution
+# concurrent-futures is built-in in Python 3.2+
