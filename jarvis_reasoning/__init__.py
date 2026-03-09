@@ -387,7 +387,7 @@ class ReActLoop:
                     break
 
                 # Thought generation with dynamic context compression
-                thought = self._generate_thought(query, context, observations, iteration)
+                thought = self._generate_thought(query, context, observations, thoughts, iteration)
                 thoughts.append(thought)
                 logger.debug("Thought: %s", thought[:100])
 
@@ -511,7 +511,14 @@ class ReActLoop:
             logger.debug("Fallback context fetch failed: %s", e)
         return ""
 
-    def _generate_thought(self, query: str, context: str, observations: List[str], iteration: int = 1) -> str:
+    def _generate_thought(
+        self,
+        query: str,
+        context: str,
+        observations: List[str],
+        thoughts: List[str],
+        iteration: int = 1,
+    ) -> str:
         """Generate reasoning thought for current state with dynamic context compression."""
         system_prompt = (
             "You are JARVIS, an AI assistant. Think step by step about how to solve "
