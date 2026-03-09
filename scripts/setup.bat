@@ -1,167 +1,183 @@
 @echo off
 chcp 65001 >nul 2>&1
-setlocal enabledelayedexpansion
+setlocal EnableExtensions EnableDelayedExpansion
 
-:: ======================================================================
-::  JARVIS V19 - Universal Setup Installer (Windows)
-::  Hardware Auto-Detect Edition
-::  Enhanced with comprehensive error handling and debug pauses
-:: ======================================================================
-
-:: ======================================================================
-:: DEBUG STARTUP - Shows script is running before anything else
-:: ======================================================================
-echo ========================================
-echo JARVIS SETUP SCRIPT STARTED
-echo ========================================
-echo Current directory: %CD%
-echo Script location: %~f0
-echo ========================================
-pause
-
-:: --- Configuration ----------------------------------------------------
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%.."
 set "PROJECT_DIR=%CD%"
-if !errorlevel! neq 0 (
-    call :echo_color "%RED%" "ERROR: Cannot change to project directory: %PROJECT_DIR%"
-    echo Error code: !errorlevel!
-    pause
-    exit /b 1
-)
-
 set "VENV_DIR=%PROJECT_DIR%\.venv"
 set "PYTHON_MIN=3.10"
 set "OLLAMA_URL=http://localhost:11434"
-
-:: Always include these models
 set "BASE_MODELS=nomic-embed-text jobautomation/OpenEuroLLM-Czech:latest"
 set "SELECTED_MODEL="
+set "DEFAULT_RAM_GB=8"
 
-:: --- Colors for Windows (disabled for CMD compatibility) ---
-set "RESET="
-set "RED="
-set "GREEN="
-set "YELLOW="
-set "CYAN="
-set "BLUE="
+for /f %%a in ('powershell -NoProfile -Command "$esc=[char]27; Write-Output $esc"') do set "ESC=%%a"
+if not defined ESC set "ESC="
+
+set "RESET=%ESC%[0m"
+set "BOLD=%ESC%[1m"
+set "RED=%ESC%[91m"
+set "GREEN=%ESC%[92m"
+set "YELLOW=%ESC%[93m"
+set "BLUE=%ESC%[94m"
+set "MAGENTA=%ESC%[95m"
+set "CYAN=%ESC%[96m"
+set "WHITE=%ESC%[97m"
 
 goto :main
 
-:: --- Helper Functions --------------------------------------------------
 :echo_color
 set "color=%~1"
 set "text=%~2"
-set "text=%text:"=%"
-echo %color%%text%%RESET%
+echo(!color!!text!!RESET!
+goto :eof
+
+:section
+echo.
+call :echo_color "%CYAN%" "%~1"
+goto :eof
+
+:progress
+call :echo_color "%BLUE%" "[→] %~1"
+goto :eof
+
+:success
+call :echo_color "%GREEN%" "[✓] %~1"
+goto :eof
+
+:warn
+call :echo_color "%YELLOW%" "[!] %~1"
+goto :eof
+
+:error_msg
+call :echo_color "%RED%" "[×] %~1"
+goto :eof
+
+:print_banner
+echo.
+call :echo_color "%MAGENTA%" "╔══════════════════════════════════════════════════════════════════════╗"
+call :echo_color "%MAGENTA%" "║                        🤖 JARVIS V20 SETUP                         ║"
+call :echo_color "%MAGENTA%" "║                 Windows Smart Installer & Detector                ║"
+call :echo_color "%MAGENTA%" "╚══════════════════════════════════════════════════════════════════════╝"
+call :echo_color "%CYAN%"    "      ✨ Barevne UI  •  Automaticka detekce HW  •  Ollama ready"
+echo.
 goto :eof
 
 :detect_hardware
-:: Global variables for hardware
 set "VRAM_GB=0"
-set "RAM_GB=0"
-set "GPU_NAME=Neznama nebo zadna GPU"
+set "RAM_GB=%DEFAULT_RAM_GB%"
+set "GPU_NAME=No GPU detected"
 
-:: Detect VRAM using nvidia-smi
-for /f "tokens=*" %%a in ('nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2^>nul') do (
-    set /a VRAM_MB=%%a
+for /f "usebackq delims=" %%a in (`nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2^>nul`) do (
+    if not defined VRAM_MB set "VRAM_MB=%%a"
+)
+if defined VRAM_MB (
     set /a VRAM_GB=VRAM_MB/1024
 )
 
-:: Detect GPU name
-for /f "tokens=*" %%a in ('nvidia-smi --query-gpu=name --format=csv,noheader 2^>nul') do (
-    set "GPU_NAME=%%a"
-    goto :ram_detection
+for /f "usebackq delims=" %%a in (`nvidia-smi --query-gpu=name --format=csv,noheader 2^>nul`) do (
+    if not defined GPU_NAME_FOUND (
+        set "GPU_NAME=%%a"
+        set "GPU_NAME_FOUND=1"
+    )
 )
 
-:ram_detection
-:: Detect RAM using wmic
-for /f "tokens=2 delims==" %%a in ('wmic OS get TotalVisibleMemorySize /value 2^>nul ^| find "TotalVisibleMemorySize"') do (
-    set /a RAM_KB=%%a
-    set /a RAM_GB=RAM_KB/1048576
+for /f "tokens=2" %%a in ('powershell -NoProfile -Command "(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1048576" 2^>nul') do set "RAM_MB=%%a"
+if defined RAM_MB (
+    for /f "tokens=1 delims=." %%b in ("%RAM_MB%") do set /a RAM_GB=%%b/1024
 )
+
+if not defined RAM_MB (
+    for /f "tokens=2 delims=:" %%a in ('systeminfo ^| findstr /C:"Total Physical Memory"') do set "RAM_LINE=%%a"
+    if defined RAM_LINE (
+        set "RAM_LINE=!RAM_LINE: =!"
+        set "RAM_LINE=!RAM_LINE:,=!"
+        for /f "tokens=1 delims=M" %%a in ("!RAM_LINE!") do set "RAM_MB=%%a"
+        if defined RAM_MB set /a RAM_GB=RAM_MB/1024
+    )
+)
+
+if not defined RAM_GB set "RAM_GB=%DEFAULT_RAM_GB%"
+if %RAM_GB% leq 0 set "RAM_GB=%DEFAULT_RAM_GB%"
+if %VRAM_GB% leq 0 set "VRAM_GB=0"
+set "VRAM_MB="
+set "GPU_NAME_FOUND="
+set "RAM_MB="
+set "RAM_LINE="
 goto :eof
 
 :select_model
 echo.
-call :echo_color "%CYAN%" "======================================================================"
-call :echo_color "%CYAN%" "Hardware Detekce:"
-call :echo_color "%CYAN%" "======================================================================"
+call :echo_color "%CYAN%" "══════════════════════════════════════════════════════════════════════"
+call :echo_color "%CYAN%" "🖥  Detekce hardwaru"
+call :echo_color "%CYAN%" "══════════════════════════════════════════════════════════════════════"
 echo   GPU:  %GPU_NAME%
 if %VRAM_GB% gtr 0 (
     echo   VRAM: %VRAM_GB% GB
 ) else (
-    echo   VRAM: Nedetekovano (NVIDIA driver chybi)
+    echo   VRAM: Nedetekovano ^(nebo bez NVIDIA GPU^)
 )
-if %RAM_GB% gtr 0 (
-    echo   RAM:  %RAM_GB% GB
-)
+echo   RAM:  %RAM_GB% GB
 echo.
-call :echo_color "%CYAN%" "======================================================================"
-call :echo_color "%CYAN%" "Doporucone modely pro tvuj system:"
-call :echo_color "%CYAN%" "======================================================================"
+call :echo_color "%CYAN%" "Doporucene modely pro tvuj system:"
 echo.
 
 set INDEX=1
 
 if %VRAM_GB% lss 4 (
     echo   [!INDEX!] qwen2.5:3b-instruct
-    echo       Lehky a rychly model ^(idealni pro slabsi VRAM^)
+    echo       ⚡ Lehk y, rychly a vhodny pro slabsi hardware
     echo.
     set "REC_!INDEX!=qwen2.5:3b-instruct"
     set /a INDEX+=1
 )
-if %VRAM_GB% geq 4 (
-    if %VRAM_GB% lss 6 (
-        echo   [!INDEX!] qwen2.5:7b-instruct
-        echo       Dobra rovnovaha mezi rychlosti a kvalitou
-        echo.
-        set "REC_!INDEX!=qwen2.5:7b-instruct"
-        set /a INDEX+=1
-        echo   [!INDEX!] llama3.1:8b-instruct-q4_K_M
-        echo       Vyssi kvalita uvazovani
-        echo.
-        set "REC_!INDEX!=llama3.1:8b-instruct-q4_K_M"
-        set /a INDEX+=1
-    )
+if %VRAM_GB% geq 4 if %VRAM_GB% lss 6 (
+    echo   [!INDEX!] qwen2.5:7b-instruct
+    echo       ⚖️  Dobra rovnovaha mezi rychlosti a kvalitou
+    echo.
+    set "REC_!INDEX!=qwen2.5:7b-instruct"
+    set /a INDEX+=1
+    echo   [!INDEX!] llama3.1:8b-instruct-q4_K_M
+    echo       🧠 Lepsi kvalita pri rozumne spotrebe VRAM
+    echo.
+    set "REC_!INDEX!=llama3.1:8b-instruct-q4_K_M"
+    set /a INDEX+=1
 )
-if %VRAM_GB% geq 6 (
-    if %VRAM_GB% lss 9 (
-        echo   [!INDEX!] llama3.1:8b-instruct
-        echo       DOPORUCENO - Nejlepsi pro 8GB VRAM ^(Ryzen-Beast^)
-        echo.
-        set "REC_!INDEX!=llama3.1:8b-instruct"
-        set /a INDEX+=1
-        echo   [!INDEX!] qwen2.5:7b-instruct
-        echo       Rychlejsi alternativa pro programovani
-        echo.
-        set "REC_!INDEX!=qwen2.5:7b-instruct"
-        set /a INDEX+=1
-    )
+if %VRAM_GB% geq 6 if %VRAM_GB% lss 9 (
+    echo   [!INDEX!] llama3.1:8b-instruct
+    echo       ✅ DOPORUCENO pro 8GB VRAM
+    echo.
+    set "REC_!INDEX!=llama3.1:8b-instruct"
+    set /a INDEX+=1
+    echo   [!INDEX!] qwen2.5:7b-instruct
+    echo       ⚡ Rychlejsi alternativa pro coding workflow
+    echo.
+    set "REC_!INDEX!=qwen2.5:7b-instruct"
+    set /a INDEX+=1
 )
 if %VRAM_GB% geq 9 (
     echo   [!INDEX!] llama3.1:8b-instruct
-    echo       Rychly a velmi schopny
+    echo       🚀 Rychly a velmi schopny model
     echo.
     set "REC_!INDEX!=llama3.1:8b-instruct"
     set /a INDEX+=1
     echo   [!INDEX!] mistral-nemo:12b-instruct-q4_K_M
-    echo       Vyssi kvalita s 12B parametry
+    echo       🧩 Vyssi kvalita s 12B parametry
     echo.
     set "REC_!INDEX!=mistral-nemo:12b-instruct-q4_K_M"
     set /a INDEX+=1
 )
 
 set CUSTOM_CHOICE=%INDEX%
-echo   [%CUSTOM_CHOICE%] Vlastni - Zadej jmeno jineho modelu
+echo   [%CUSTOM_CHOICE%] ✍️  Vlastni model
 echo.
 
 :selection_loop
 set /p CHOICE="Vyber [1-%CUSTOM_CHOICE%]: "
-
 echo %CHOICE%| findstr /r "^[0-9][0-9]*$" >nul
 if errorlevel 1 (
-    call :echo_color "%RED%" "  Zadej platne cislo!"
+    call :error_msg "Zadej platne cislo."
     goto selection_loop
 )
 if %CHOICE% lss 1 goto selection_loop
@@ -169,64 +185,47 @@ if %CHOICE% gtr %CUSTOM_CHOICE% goto selection_loop
 
 if %CHOICE% equ %CUSTOM_CHOICE% (
     :custom_model_loop
-    set /p CUSTOM_MODEL="Zadej jmeno (napr. llama3.1:8b-instruct): "
+    set /p CUSTOM_MODEL="Zadej jmeno modelu: "
     if "!CUSTOM_MODEL!"=="" goto custom_model_loop
     set "SELECTED_MODEL=!CUSTOM_MODEL!"
 ) else (
-    for %%i in (!CHOICE!) do set "SELECTED_MODEL=!REC_%%i!"
+    call set "SELECTED_MODEL=%%REC_%CHOICE%%%"
 )
 
-call :echo_color "%GREEN%" "  Vybrano: !SELECTED_MODEL!"
+call :success "Vybrano: !SELECTED_MODEL!"
 goto :eof
 
 :update_user_config
 set "model=%~1"
-if not exist "%PROJECT_DIR%\jarvis_config" mkdir "%PROJECT_DIR%\jarvis_config" 2>&1
-if !errorlevel! neq 0 (
-    call :echo_color "%RED%" "ERROR: Cannot create jarvis_config directory"
-    echo Error code: !errorlevel!
-    pause
-    exit /b 1
-)
+if not exist "%PROJECT_DIR%\jarvis_config" mkdir "%PROJECT_DIR%\jarvis_config"
 set "config_file=%PROJECT_DIR%\jarvis_config\user_config.py"
-
 (
-echo.
-echo """ User Configuration Override for JARVIS
+echo """
+echo User Configuration Override for JARVIS
 echo.
 echo This file was auto-generated by the setup script based on your
 echo detected hardware and selected model preferences.
-echo """ 
+echo """
 echo.
 echo def apply_user_config^(^):
-echo     """ Apply user-selected model configuration. """
 echo     import jarvis_config as _cfg
 echo.
-echo     # Override with user-selected models
 echo     _cfg.MODELS["planner"] = "%model%"
 echo     _cfg.MODELS["verifier"] = "%model%"
 echo     _cfg.MODELS["reasoner"] = "%model%"
-echo.
-echo     # Note: MODELS["czech_gateway"] remains jobautomation/OpenEuroLLM-Czech:latest
-) > "%config_file%" 2>&1
-
+) > "%config_file%"
 if errorlevel 1 (
-    call :echo_color "%RED%" "  Nepodarilo se ulozit konfiguraci!"
-    echo Error code: !errorlevel!
-    pause
+    call :error_msg "Nepodarilo se ulozit konfiguraci."
     exit /b 1
 )
-call :echo_color "%GREEN%" "  Konfigurace ulozena: %config_file%"
+call :success "Konfigurace ulozena: %config_file%"
 goto :eof
 
 :check_python
 where python >nul 2>&1
 if %errorlevel% equ 0 (
-    python --version 2>nul | findstr /r "Python [3]\.[0-9]*" >nul
-    if !errorlevel! equ 0 (
-        set "PYTHON=python"
-        exit /b 0
-    )
+    set "PYTHON=python"
+    exit /b 0
 )
 where py >nul 2>&1
 if %errorlevel% equ 0 (
@@ -244,33 +243,22 @@ curl -s "%OLLAMA_URL%/api/tags" >nul 2>&1
 exit /b %errorlevel%
 
 :wait_for_ollama
-echo.
-call :echo_color "%YELLOW%" "  Cekam na sluzbu Ollama..."
-set "OLLAMA_READY=0"
+call :warn "Cekam na sluzbu Ollama..."
 for /L %%i in (1,1,30) do (
     curl -s "%OLLAMA_URL%/api/tags" >nul 2>&1
-    if !errorlevel! equ 0 (
-        set "OLLAMA_READY=1"
-        goto :eof
-    )
+    if !errorlevel! equ 0 exit /b 0
     timeout /t 2 /nobreak >nul
 )
-exit /b %errorlevel%
+exit /b 1
 
 :create_venv
 if exist "%VENV_DIR%\Scripts\activate.bat" (
-    call :echo_color "%BLUE%" "  Virtualni prostredi jiz existuje"
+    call :success "Virtualni prostredi uz existuje"
     exit /b 0
 )
-call :echo_color "%CYAN%" "  Vytvarim virtualni prostredi..."
-%PYTHON% -m venv "%VENV_DIR%" 2>&1
-if !errorlevel! neq 0 (
-    call :echo_color "%RED%" "ERROR: Failed to create virtual environment"
-    echo Error code: !errorlevel!
-    echo Command: %PYTHON% -m venv "%VENV_DIR%"
-    pause
-    exit /b 1
-)
+call :progress "Vytvarim virtualni prostredi..."
+%PYTHON% -m venv "%VENV_DIR%"
+if errorlevel 1 exit /b 1
 exit /b 0
 
 :activate_venv
@@ -278,221 +266,124 @@ set "PATH=%VENV_DIR%\Scripts;%PATH%"
 goto :eof
 
 :install_dependencies
-call :echo_color "%CYAN%" "  Instaluji Python balicky..."
-%PYTHON% -m pip install --upgrade pip -q 2>&1
-if !errorlevel! neq 0 (
-    call :echo_color "%RED%" "ERROR: Failed to upgrade pip"
-    echo Error code: !errorlevel!
-    pause
-    exit /b 1
-)
-%PYTHON% -m pip install -r "%PROJECT_DIR%\requirements.txt" -q 2>&1
-if !errorlevel! neq 0 (
-    call :echo_color "%RED%" "ERROR: Failed to install dependencies from requirements.txt"
-    echo Error code: !errorlevel!
-    echo Check requirements.txt: "%PROJECT_DIR%\requirements.txt"
-    pause
-    exit /b 1
-)
+call :progress "Instaluji Python balicky a colorama podporu..."
+%PYTHON% -m pip install --upgrade pip
+if errorlevel 1 exit /b 1
+%PYTHON% -m pip install -r "%PROJECT_DIR%\requirements.txt"
+if errorlevel 1 exit /b 1
 exit /b 0
 
 :pull_model
 set "model=%~1"
-call :echo_color "%CYAN%" "  Stahuji model: %model% (tohle chvili potrva)..."
-call :echo_color "%CYAN%" "  ========================================================"
-ollama pull %model% 2>&1
-if !errorlevel! equ 0 (
-    call :echo_color "%GREEN%" "  ✓ Model nainstalovan: %model%"
-) else (
-    call :echo_color "%RED%" "  ✗ Chyba stahovani: %model%"
-    echo Error code: !errorlevel!
-    pause
-    exit /b 1
-)
+call :progress "Stahuji model %model%..."
+ollama pull %model%
+if errorlevel 1 exit /b 1
+call :success "Model pripraven: %model%"
 goto :eof
 
 :create_data_dirs
-call :echo_color "%CYAN%" "  Vytvarim pracovni slozky..."
-if not exist "%PROJECT_DIR%\jarvis_data\memory" mkdir "%PROJECT_DIR%\jarvis_data\memory" 2>&1
-if !errorlevel! neq 0 (
-    call :echo_color "%RED%" "ERROR: Cannot create jarvis_data\memory directory"
-    echo Error code: !errorlevel!
-    pause
-    exit /b 1
-)
-if not exist "%PROJECT_DIR%\jarvis_data\chromadb" mkdir "%PROJECT_DIR%\jarvis_data\chromadb" 2>&1
-if !errorlevel! neq 0 (
-    call :echo_color "%RED%" "ERROR: Cannot create jarvis_data\chromadb directory"
-    echo Error code: !errorlevel!
-    pause
-    exit /b 1
-)
-if not exist "%PROJECT_DIR%\jarvis_data\wal" mkdir "%PROJECT_DIR%\jarvis_data\wal" 2>&1
-if !errorlevel! neq 0 (
-    call :echo_color "%RED%" "ERROR: Cannot create jarvis_data\wal directory"
-    echo Error code: !errorlevel!
-    pause
-    exit /b 1
-)
-if not exist "%PROJECT_DIR%\jarvis_data\procedural" mkdir "%PROJECT_DIR%\jarvis_data\procedural" 2>&1
-if !errorlevel! neq 0 (
-    call :echo_color "%RED%" "ERROR: Cannot create jarvis_data\procedural directory"
-    echo Error code: !errorlevel!
-    pause
-    exit /b 1
-)
+call :progress "Vytvarim pracovni slozky..."
+if not exist "%PROJECT_DIR%\jarvis_data\memory" mkdir "%PROJECT_DIR%\jarvis_data\memory"
+if not exist "%PROJECT_DIR%\jarvis_data\orchestrator" mkdir "%PROJECT_DIR%\jarvis_data\orchestrator"
+if not exist "%PROJECT_DIR%\jarvis_data\chromadb" mkdir "%PROJECT_DIR%\jarvis_data\chromadb"
+if not exist "%PROJECT_DIR%\jarvis_data\knowledge_graph" mkdir "%PROJECT_DIR%\jarvis_data\knowledge_graph"
+if not exist "%PROJECT_DIR%\jarvis_data\wal" mkdir "%PROJECT_DIR%\jarvis_data\wal"
+if not exist "%PROJECT_DIR%\jarvis_data\procedural" mkdir "%PROJECT_DIR%\jarvis_data\procedural"
+if errorlevel 1 exit /b 1
+call :success "Pracovni slozky jsou pripravene"
 goto :eof
 
-:print_banner
-echo.
-echo ======================================================================
-echo          JARVIS V19 - Universal Setup Installer
-echo                 Windows Hardware Auto-Detect
-echo ======================================================================
-echo.
-goto :eof
-
-:: --- MAIN SCRIPT ------------------------------------------------------
 :main
 call :print_banner
 
-:: Step 1: Check Python
-call :echo_color "%CYAN%" "[1/7] Kontrola Pythonu..."
+call :section "[1/7] Kontrola Pythonu"
 call :check_python
-if !errorlevel! neq 0 (
-    call :echo_color "%RED%" "ERROR: Python 3.10+ nenalezen!"
-    echo Error code: !errorlevel!
-    echo.
-    echo Please install Python 3.10 or higher from: https://www.python.org/downloads/
-    echo Make sure to check "Add Python to PATH" during installation.
+if errorlevel 1 (
+    call :error_msg "Python 3.10+ nebyl nalezen v PATH."
+    echo Nainstaluj Python z https://www.python.org/downloads/
     pause
     exit /b 1
 )
 call :get_python_version
-call :echo_color "%GREEN%" "  ✓ Python !PYTHON_VERSION! pripraven"
-echo.
+call :success "Python !PYTHON_VERSION! pripraven"
 
-:: Step 2: Create venv
-call :echo_color "%CYAN%" "[2/7] Priprava prostredi (venv)..."
+call :section "[2/7] Virtualni prostredi"
 call :create_venv
-if !errorlevel! neq 0 (
-    call :echo_color "%RED%" "ERROR: Virtual environment creation failed!"
+if errorlevel 1 (
+    call :error_msg "Nepodarilo se vytvorit virtualni prostredi."
     pause
     exit /b 1
 )
 call :activate_venv
-if !errorlevel! neq 0 (
-    call :echo_color "%RED%" "ERROR: Failed to activate virtual environment!"
-    pause
-    exit /b 1
-)
-call :echo_color "%GREEN%" "  ✓ Virtualni prostredi pripraveno"
-echo.
+call :success "Virtualni prostredi aktivovano"
 
-:: Step 3: Install dependencies
-call :echo_color "%CYAN%" "[3/7] Instalace knihoven..."
+call :section "[3/7] Instalace zavislosti"
 call :install_dependencies
-if !errorlevel! neq 0 (
-    call :echo_color "%RED%" "ERROR: Dependency installation failed!"
+if errorlevel 1 (
+    call :error_msg "Instalace Python balicku selhala."
     pause
     exit /b 1
 )
-call :echo_color "%GREEN%" "  ✓ Knihovny nainstalovany"
-echo.
+call :success "Knihovny byly nainstalovany"
 
-:: Step 4: Check Ollama
-call :echo_color "%CYAN%" "[4/7] Kontrola sluzby Ollama..."
+call :section "[4/7] Kontrola Ollamy"
 call :check_ollama_running
-if !errorlevel! neq 0 (
-    call :echo_color "%YELLOW%" "  Startuji Ollamu..."
-    start "" ollama serve 2>&1
-    if !errorlevel! neq 0 (
-        call :echo_color "%RED%" "ERROR: Failed to start Ollama service!"
-        echo Error code: !errorlevel!
-        echo.
-        echo Please install Ollama from: https://ollama.com/download
-        pause
-        exit /b 1
-    )
+if errorlevel 1 (
+    call :warn "Ollama nebezi. Pokousim se ji spustit na pozadi..."
+    start "" ollama serve
     call :wait_for_ollama
-    if !errorlevel! neq 0 (
-        call :echo_color "%RED%" "ERROR: Ollama failed to start or is not responding!"
-        echo Error code: !errorlevel!
+    if errorlevel 1 (
+        call :error_msg "Ollama se nepodarilo spustit."
+        echo Nainstaluj Ollama z https://ollama.com/download
         pause
         exit /b 1
     )
 )
-call :echo_color "%GREEN%" "  ✓ Ollama bezi"
-echo.
+call :success "Ollama je pripravena"
 
-:: Step 5: Detect hardware and select model
-call :echo_color "%CYAN%" "[5/7] Detekce hardwaru a vyber modelu..."
+call :section "[5/7] Detekce hardwaru"
 call :detect_hardware
-if !errorlevel! neq 0 (
-    call :echo_color "%RED%" "ERROR: Hardware detection failed!"
-    pause
-    exit /b 1
-)
+if %RAM_GB% equ %DEFAULT_RAM_GB% call :warn "RAM se nepodarilo presne zjistit, pouzivam vychozi hodnotu %DEFAULT_RAM_GB% GB."
+call :success "Detekce dokoncena"
 call :select_model
-if !errorlevel! neq 0 (
-    call :echo_color "%RED%" "ERROR: Model selection failed!"
-    pause
-    exit /b 1
-)
-echo.
 
-:: Step 6: Download models
-call :echo_color "%CYAN%" "[6/7] Stahovani LLM modelu..."
-echo.
+call :section "[6/7] Stahovani modelu"
+call :warn "Modely mohou mit jednotky GB, vydrz chvili."
 for %%m in (%BASE_MODELS%) do (
     call :pull_model "%%m"
-    if !errorlevel! neq 0 (
-        call :echo_color "%RED%" "ERROR: Failed to download model: %%m"
+    if errorlevel 1 (
+        call :error_msg "Nepodarilo se stahnout model %%m."
         pause
         exit /b 1
     )
 )
-echo.
 call :pull_model "%SELECTED_MODEL%"
-if !errorlevel! neq 0 (
-    call :echo_color "%RED%" "ERROR: Failed to download selected model!"
+if errorlevel 1 (
+    call :error_msg "Nepodarilo se stahnout vybrany model."
     pause
     exit /b 1
 )
-echo.
 call :update_user_config "%SELECTED_MODEL%"
-if !errorlevel! neq 0 (
-    call :echo_color "%RED%" "ERROR: Failed to update user configuration!"
+if errorlevel 1 (
     pause
     exit /b 1
 )
-echo.
 
-:: Step 7: Create data directories
-call :echo_color "%CYAN%" "[7/7] Dokoncovani instalace..."
+call :section "[7/7] Dokonceni instalace"
 call :create_data_dirs
-if !errorlevel! neq 0 (
-    call :echo_color "%RED%" "ERROR: Failed to create data directories!"
+if errorlevel 1 (
+    call :error_msg "Nepodarilo se vytvorit datove slozky."
     pause
     exit /b 1
 )
-call :echo_color "%GREEN%" "  ✓ Pracovni slozky vytvoreny"
-echo.
 
-:: Success!
 echo.
-call :echo_color "%GREEN%" "======================================================================"
-call :echo_color "%GREEN%" "  INSTALACE JARVISE JE KOMPLETNI!"
-call :echo_color "%GREEN%" "======================================================================"
+call :echo_color "%GREEN%" "╔══════════════════════════════════════════════════════════════════════╗"
+call :echo_color "%GREEN%" "║                      🎉 INSTALACE DOKONCENA                        ║"
+call :echo_color "%GREEN%" "╚══════════════════════════════════════════════════════════════════════╝"
+echo   🧠 Vybrany model: %SELECTED_MODEL%
+echo   🌍 Czech gateway: jobautomation/OpenEuroLLM-Czech:latest
+echo   ▶️  Dalsi krok: spust scripts\start_jarvis.bat
 echo.
-echo   - Tvuj mozek: %SELECTED_MODEL%
-echo   - Prekladac:  OpenEuroLLM-Czech:latest
-echo.
-echo   Nyni spust: start_jarvis.bat
-echo.
-echo.
-echo ========================================
-echo SETUP COMPLETED SUCCESSFULLY
-echo ========================================
 pause
 exit /b 0

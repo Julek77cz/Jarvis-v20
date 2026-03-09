@@ -5,6 +5,7 @@
 pydantic>=2.5.0
 requests>=2.31.0
 json-repair>=0.25.0
+colorama>=0.4.6
 
 # Existing dependencies (from original requirements.txt)
 duckduckgo-search>=4.1.0
