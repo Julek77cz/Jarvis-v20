@@ -1,0 +1,32 @@
+# Auto-detect text files and perform line ending conversion
+* text=auto
+
+# .bat files must always have CRLF line endings for Windows CMD
+*.bat text eol=crlf
+
+# Shell scripts should have LF line endings
+*.sh text eol=lf
+
+# Python files use LF line endings
+*.py text eol=lf
+
+# JSON files use LF line endings
+*.json text eol=lf
+
+# Markdown files use LF line endings
+*.md text eol=lf
+
+# YAML files use LF line endings
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Keep binary files as-is
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar binary
+*.gz binary
