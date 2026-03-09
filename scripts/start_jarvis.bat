@@ -14,8 +14,9 @@ set "PROJECT_DIR=%CD%"
 set "OLLAMA_URL=http://localhost:11434"
 set "GIT_REMOTE_URL=https://github.com/Julek77cz/Jarvis-v20.git"
 
-:: Direct ANSI escape codes (ASCII 27)
-for /f %%a in ('echo prompt $E ^| cmd') do set "ESC=%%a"
+:: Setup ANSI escape codes (works on Windows 10+)
+:: Use simple method with echo command
+for /F "tokens=1,2 delims=#" %%a in ('"prompt #$H#$E# & echo on & for %%b in (1) do rem"') do set "ESC=%%b"
 set "RESET=%ESC%[0m"
 set "RED=%ESC%[91m"
 set "GREEN=%ESC%[92m"
