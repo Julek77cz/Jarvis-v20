@@ -6,15 +6,19 @@ setlocal EnableDelayedExpansion
 ::  JARVIS V20 - Ultimate Auto-Updating Launcher (Windows)
 :: ═══════════════════════════════════════════════════════════════════════
 
-:: Nastavení cest (Vždy běží z kořenové složky, i když je spuštěn ze scripts/)
+:: Nastavení cest
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%.."
 set "PROJECT_DIR=%CD%"
 set "OLLAMA_URL=http://localhost:11434"
 set "GIT_REMOTE_URL=https://github.com/Julek77cz/Jarvis-v20.git"
 
-:: Trik pro bezchybné ANSI barvy ve Windows CMD (generuje znak ESC)
-for /F "delims=" %%a in ('echo prompt $E ^| cmd') do set "ESC=%%a"
+:: 1. Donutit Windows CMD podporovat ANSI barvy (Kritický fix)
+reg add HKCU\Console /v VirtualTerminalLevel /t REG_DWORD /d 1 /f >nul 2>&1
+
+:: 2. Spolehlivé získání ESC znaku přes PowerShell
+for /f %%A in ('powershell -NoProfile -Command "[char]27"') do set "ESC=%%A"
+
 set "C_RESET=%ESC%[0m"
 set "C_RED=%ESC%[91m"
 set "C_GREEN=%ESC%[92m"
@@ -32,7 +36,7 @@ echo %C_CYAN% ║                                                           ║%
 echo %C_CYAN% ╚═══════════════════════════════════════════════════════════╝%C_RESET%
 echo.
 
-:: 1. Auto-update z GitHubu (s podporou pro ZIP stažení)
+:: 1. Auto-update z GitHubu
 echo %C_BLUE%[1/5] Kontroluji aktualizace z GitHubu...%C_RESET%
 git --version >nul 2>&1
 if errorlevel 1 (
