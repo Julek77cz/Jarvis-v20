@@ -1,6 +1,6 @@
 """JARVIS V20 - Main Orchestrator"""
 import logging
-from typing import Optional, Callable
+from typing import Callable, Optional
 
 from jarvis_config import (
     OLLAMA_URL, MODELS, HW_OPTIONS,
@@ -10,7 +10,7 @@ from jarvis_config import (
 )
 from jarvis_memory import CognitiveMemory
 from jarvis_tools import create_tool_class, TOOLS_SCHEMA
-from planning.hierarchical_planner import HierarchicalPlanner
+from planning.hierarchical_planner import HierarchicalPlanner, Plan, PlanningNode
 from reasoning.react_v2 import ReActLoopV2
 from reasoning.metacognition import MetacognitiveLayer
 from tools.parallel_executor import ParallelToolExecutor
@@ -102,18 +102,46 @@ class JarvisV20:
         from jarvis_core import CzechBridgeClient
         return CzechBridgeClient()
 
+    def _analyze_intent(self, query_en: str) -> dict:
+        """Rychlý LLM dotaz pro klasifikaci složitosti úlohy."""
+        system_prompt = (
+            "You are a routing agent. Analyze the user's query and classify it. "
+            "Return ONLY valid JSON:\n"
+            "{\n"
+            '  "category": "smalltalk" | "simple_task" | "complex_task",\n'
+            '  "direct_response": "Reply here ONLY if category is smalltalk, otherwise empty string"\n'
+            "}\n"
+            "- smalltalk: greetings, casual chat, thanking, simple questions about yourself.\n"
+            "- simple_task: needs 1-2 tool calls (e.g., check time, read and save a memory, run a single command).\n"
+            "- complex_task: needs research, multiple steps, writing code, comparison, or deep analysis."
+        )
+
+        try:
+            bridge = self._get_bridge()
+            result = bridge.call_json(
+                "planner",
+                [{"role": "user", "content": query_en}],
+                system_prompt=system_prompt,
+            )
+            if result and "category" in result:
+                return result
+        except Exception as e:
+            logger.error("Intent analysis failed: %s", e)
+
+        return {"category": "complex_task", "direct_response": ""}
+
     def process(self, query: str, stream_callback: Callable = None) -> str:
         """
-        Process user query using V20 architecture.
+        Process user query using V20 architecture with LLM Router.
 
         Workflow:
-        1. Translate CZ → EN (CzechBridge)
-        2. Hierarchical plan creation
-        3. Execution (V2 ReAct or Swarm V2)
-        4. Metacognitive monitoring
-        5. Multi-hop reasoning
-        6. Translate EN → CZ
-        7. Explainable AI summary
+        1. Translate CZ -> EN (CzechBridge)
+        2. Intent Analysis (LLM Router) - classify as smalltalk/simple_task/complex_task
+        3a. smalltalk: Return direct response
+        3b. simple_task: Use ReAct Loop directly (skip planner)
+        3c. complex_task: Use Hierarchical Planner + Swarm
+        4. Translate EN -> CZ
+        5. Return response
 
         Args:
             query: User query (Czech)
@@ -124,54 +152,69 @@ class JarvisV20:
         """
         logger.info("Processing query: %s...", query[:50])
 
-        # Step 1: Translate CZ → EN
+        # Krok 1: Překlad CZ -> EN
         bridge = self._get_bridge()
         query_en = bridge.translate_to_en(query)
-        logger.debug("Translated: CZ='%s...' → EN='%s...'", query[:50], query_en[:50])
+        logger.debug("Translated: CZ='%s...' -> EN='%s...'", query[:50], query_en[:50])
 
-        # Step 2: Create hierarchical plan
-        plan = self.planner.create_plan(query_en)
-        logger.info("Plan created: %d nodes", plan.root.get_total_nodes())
+        # Uložit dotaz do paměti
+        self.memory.add_message("user", query)
 
-        # Step 3: Monitor decision
-        decision_id = self.metacognition.monitor_decision(
-            decision_type="task_planning",
-            decision_context={"query": query_en, "plan_nodes": plan.root.get_total_nodes()},
-            decision_confidence=plan.calculate_confidence(),
-            decision_rationale="Hierarchical decomposition with backtracking",
-        )
+        # Krok 2: Chytré směrování (Intent Analysis)
+        intent = self._analyze_intent(query_en)
+        category = intent.get("category", "complex_task")
+        logger.info("Query routed as: %s", category.upper())
 
-        # Step 4: Execute based on complexity
-        if plan.root.get_total_nodes() > 3 and self.swarm:
-            logger.info("Using Swarm V2 for complex task")
-            response_en = self.swarm.execute_plan(plan)
-        else:
-            logger.info("Using V2 ReAct Loop")
-            response_en = self.reasoning.run(query_en, plan, stream_callback=None)
+        response_en = ""
 
-        # Step 5: Record outcome
-        self.metacognition.record_outcome(
-            decision_id=decision_id,
-            outcome="success" if response_en else "failure",
-            outcome_quality=0.8 if len(response_en) > 50 else 0.3,
-            execution_time=0.0,  # Would need to track
-        )
+        # Krok 3: Spuštění na základě kategorie
+        if category == "smalltalk":
+            response_en = intent.get("direct_response", "Hello! How can I help you today?")
+            logger.info("Smalltalk response generated directly")
+
+        elif category == "simple_task":
+            logger.info("Using V2 ReAct Loop directly (Skipping Hierarchical Planner)")
+            dummy_plan = Plan(root=PlanningNode(description=query_en))
+            response_en = self.reasoning.run(query_en, dummy_plan, stream_callback=None)
+
+        else:  # complex_task
+            logger.info("Triggering Heavy Machinery: Hierarchical Planner + Swarm")
+            plan = self.planner.create_plan(query_en)
+            logger.info("Plan created: %d nodes", plan.root.get_total_nodes())
+
+            # Monitorování rozhodnutí
+            decision_id = self.metacognition.monitor_decision(
+                decision_type="task_planning",
+                decision_context={"query": query_en, "plan_nodes": plan.root.get_total_nodes()},
+                decision_confidence=plan.calculate_confidence(),
+                decision_rationale="Hierarchical decomposition for complex task",
+            )
+
+            if self.swarm:
+                response_en = self.swarm.execute_plan(plan)
+            else:
+                response_en = self.reasoning.run(query_en, plan, stream_callback=None)
+
+            # Záznam výsledku
+            self.metacognition.record_outcome(
+                decision_id=decision_id,
+                outcome="success" if response_en else "failure",
+                outcome_quality=0.8 if response_en and len(response_en) > 50 else 0.3,
+                execution_time=0.0,
+            )
 
         if not response_en:
             response_en = "I apologize, but I couldn't process your request."
+            logger.warning("Empty response generated")
 
-        # Step 6: Translate EN → CZ
+        # Krok 4: Překlad EN -> CZ
         response_cz = bridge.translate_to_cz(response_en)
-        logger.debug("Translated: EN='%s...' → CZ='%s...'", response_en[:50], response_cz[:50])
+        logger.debug("Translated: EN='%s...' -> CZ='%s...'", response_en[:50], response_cz[:50])
 
-        # Step 7: Stream response
         if stream_callback:
             stream_callback(response_cz)
 
-        # Store in memory
-        self.memory.add_message("user", query)
         self.memory.add_message("assistant", response_cz)
-
         return response_cz
 
     def explain_reasoning(self, query: str) -> str:
