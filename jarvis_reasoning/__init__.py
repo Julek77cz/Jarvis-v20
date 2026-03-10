@@ -553,7 +553,7 @@ class ReActLoop:
                 )
 
         obs_text = "\n".join(f"- {o[:200]}" for o in observations[-3:]) if observations else "No observations yet."
-        recent_thoughts = "\n".join(f"- {t}" for t in thoughts[-2:]) if thoughts else "No previous thoughts."
+        recent_thoughts = "\n".join(f"- {t}" for t in (thoughts or [])[-2:]) if (thoughts or []) else "No previous thoughts."
 
         prompt = f"""Query: {query}
 
