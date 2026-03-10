@@ -1,116 +1,128 @@
 @echo off
 chcp 65001 >nul 2>&1
-setlocal EnableExtensions EnableDelayedExpansion
+setlocal EnableExtensions
 
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%.."
-if errorlevel 1 (
-    echo [ERR] Nepodarilo se zmenit adresar
-    pause
-    exit /b 1
-)
-
 set "PROJECT_DIR=%CD%"
 set "OLLAMA_URL=http://localhost:11434"
 set "GIT_REMOTE_URL=https://github.com/Julek77cz/Jarvis-v20.git"
 
-:: Setup ANSI escape codes (works on Windows 10+)
-set "RESET=[0m"
-set "RED=[91m"
-set "GREEN=[92m"
-set "YELLOW=[93m"
-set "BLUE=[94m"
-set "MAGENTA=[95m"
-set "CYAN=[96m"
-set "WHITE=[97m"
+:: Simple ANSI colors (NO PowerShell)
+set "C_RESET=[0m"
+set "C_RED=[91m"
+set "C_GREEN=[92m"
+set "C_YELLOW=[93m"
+set "C_BLUE=[94m"
+set "C_MAGENTA=[95m"
+set "C_CYAN=[96m"
 
-goto :main
-
-:echo_color
-echo %~1%~2%RESET%
-goto :eof
-
-:print_banner
+:: Print JARVIS ASCII banner
 echo.
-call :echo_color "%CYAN%" "[JARVIS]"
-call :echo_color "%MAGENTA%" "+======================================================================+"
-call :echo_color "%MAGENTA%" "|  JARVIS V20 - Smart start for your AI assistant                      |"
-call :echo_color "%MAGENTA%" "+======================================================================+"
-call :echo_color "%CYAN%" "[INFO] Initializing brain | Syncing repo | Checking Ollama"
+echo %C_CYAN%  _____                _   _               _    __ _     _
+echo %C_CYAN% ^|  _ \              ^| ^| ^| ^|             ^| ^|  / /_)   ^| ^|
+echo %C_CYAN% ^| ^|_) ^| __ _  ___  ^| ^|_^| ^|_  ___  _ __^| ^|/ /_  ___^| ^|_
+echo %C_CYAN% ^|  _ _/ / _` ^|/ _ \^| __^| __^| ^|/ _ \^| '__^|   _/ / \^|/ _ \ __^|
+echo %C_CYAN% ^| ^|_) ^| (_^| ^| (_) ^| ^|_^| ^|_^| ^|_^| ^| ^| ^|  ^| ^|\  /  ^|  ^|^|_^| ^|
+echo %C_CYAN% ^|____/ \__,_^|\___/ \__^|\__^|\___/ ^|_^|  ^|_^| \_^|   ^|_\___^|_^|
 echo.
-goto :eof
+echo %C_MAGENTA%============================================================
+echo %C_MAGENTA%  JARVIS V20 - State-of-the-Art AI Agent
+echo %C_MAGENTA%============================================================
+echo %C_RESET%
 
-:main
-call :print_banner
-
-call :echo_color "%BLUE%" "[GIT] Kontroluji aktualizace z GitHubu..."
+:: 1. GitHub sync
+echo %C_BLUE%[1/6] Checking GitHub repository...%C_RESET%
 if exist "%PROJECT_DIR%\.git" (
     git remote set-url origin %GIT_REMOTE_URL% 2>nul
     git pull origin main 2>nul
     if errorlevel 1 (
-        call :echo_color "%YELLOW%" "[WARN] Aktualizace se nepodarilo stahnout. Pokracuji s lokalni verzi."
+        echo %C_YELLOW%  [WARN] Git pull failed, using local version.%C_RESET%
     ) else (
-        call :echo_color "%GREEN%" "[OK] Repo je synchronizovane."
+        echo %C_GREEN%  [OK] Repository synchronized.%C_RESET%
     )
 ) else (
-    call :echo_color "%YELLOW%" "[WARN] .git adresar nebyl nalezen."
+    echo %C_YELLOW%  [WARN] .git directory not found.%C_RESET%
 )
 echo.
 
-python --version >nul 2>&1
+:: 2. Python check
+echo %C_BLUE%[2/6] Checking Python installation...%C_RESET%
+python --version 2>nul
 if errorlevel 1 (
-    call :echo_color "%RED%" "[ERR] Python neni nainstalovany."
+    echo %C_RED%  [ERROR] Python is not installed or not in PATH!%C_RESET%
     pause
     exit /b 1
 )
-call :echo_color "%GREEN%" "[OK] Python je dostupny."
+echo %C_GREEN%  [OK] Python is available.%C_RESET%
+echo.
 
+:: 3. Virtual environment
+echo %C_BLUE%[3/6] Activating virtual environment...%C_RESET%
 if exist "%PROJECT_DIR%\.venv\Scripts\activate.bat" (
-    call :echo_color "%BLUE%" "[VENV] Aktivuji virtualni prostredi..."
     call "%PROJECT_DIR%\.venv\Scripts\activate.bat"
-    call :echo_color "%BLUE%" "[PIP] Kontroluji zavislosti..."
-    python -m pip install -r requirements.txt -q 2>nul
-    if errorlevel 1 (
-        call :echo_color "%YELLOW%" "[WARN] Nepodarilo se overit zavislosti."
-    ) else (
-        call :echo_color "%GREEN%" "[OK] Zavislosti OK."
-    )
+    echo %C_GREEN%  [OK] Virtual environment activated.%C_RESET%
 ) else (
-    call :echo_color "%RED%" "[ERR] Virtualni prostredi nenalezeno."
+    echo %C_RED%  [ERROR] Virtual environment not found!%C_RESET%
     pause
     exit /b 1
 )
 echo.
 
-call :echo_color "%BLUE%" "[OLLAMA] Kontroluji Ollamu..."
+:: 4. Dependencies
+echo %C_BLUE%[4/6] Installing dependencies...%C_RESET%
+pip install -r requirements.txt -q 2>nul
+if errorlevel 1 (
+    echo %C_YELLOW%  [WARN] Some dependencies may have failed to install.%C_RESET%
+) else (
+    echo %C_GREEN%  [OK] Dependencies installed.%C_RESET%
+)
+echo.
+
+:: 5. Ollama check
+echo %C_BLUE%[5/6] Checking Ollama service...%C_RESET%
 curl -s %OLLAMA_URL%/api/tags >nul 2>&1
 if errorlevel 1 (
-    call :echo_color "%YELLOW%" "[WARN] Ollama nebezi. Startuji..."
-    start /B "" ollama serve >nul 2>&1
-    timeout /t 5 /nobreak >nul
+    echo %C_YELLOW%  [WARN] Ollama is not running. Starting...%C_RESET%
+    start "" ollama serve
+    echo %C_BLUE%  [*] Waiting 8 seconds for Ollama to start...%C_RESET%
+    timeout /t 8 /nobreak >nul
     curl -s %OLLAMA_URL%/api/tags >nul 2>&1
     if errorlevel 1 (
-        call :echo_color "%RED%" "[ERR] Ollama neodpovida."
+        echo %C_RED%  [ERROR] Ollama failed to start!%C_RESET%
+        echo %C_YELLOW%  [HINT] Make sure Ollama is installed: https://ollama.com%C_RESET%
         pause
         exit /b 1
+    ) else (
+        echo %C_GREEN%  [OK] Ollama is now ready.%C_RESET%
     )
+) else (
+    echo %C_GREEN%  [OK] Ollama is ready.%C_RESET%
 )
-call :echo_color "%GREEN%" "[OK] Ollama je pripravena."
 echo.
-call :echo_color "%CYAN%" "[RUN] Startuji Mozek JARVIS..."
-call :echo_color "%CYAN%" "======================================================================"
+
+:: 6. Start JARVIS
+echo %C_CYAN%============================================================
+echo %C_CYAN%  Starting JARVIS V20...
+echo %C_CYAN%============================================================
+echo %C_RESET%
 echo.
 
 python main.py %*
-set "EXIT_CODE=%ERRORLEVEL%"
+set EXIT_CODE=%errorlevel%
 
-if %EXIT_CODE% neq 0 (
-    echo.
-    call :echo_color "%RED%" "[FAIL] JARVIS skoncil s chybou %EXIT_CODE%."
-    pause
-    exit /b %EXIT_CODE%
+:: End with pause and exit code
+echo.
+if %EXIT_CODE% equ 0 (
+    echo %C_GREEN%============================================================
+    echo %C_GREEN%  JARVIS exited cleanly.
+    echo %C_GREEN%============================================================
+) else (
+    echo %C_RED%============================================================
+    echo %C_RED%  JARVIS exited with error code: %EXIT_CODE%
+    echo %C_RED%============================================================
 )
 
 echo.
-call :echo_color "%GREEN%" "[DONE] JARVIS byl ukoncen korektne."
-exit /b 0
+pause
+exit /b %EXIT_CODE%
