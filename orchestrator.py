@@ -102,18 +102,24 @@ class JarvisV20:
         from jarvis_core import CzechBridgeClient
         return CzechBridgeClient()
 
-    def _analyze_intent(self, query_en: str) -> dict:
-        """Rychlý LLM dotaz pro klasifikaci složitosti úlohy."""
+    def _master_orchestrate(self, query_en: str) -> dict:
+        """Kognitivní vrstva (Executive Cortex) pro analýzu a vytvoření strategie zpracování."""
         system_prompt = (
-            "You are a routing agent. Analyze the user's query and classify it. "
+            "You are JARVIS's Executive Cortex (Master Orchestrator). "
+            "Your job is to analyze the user's query, think step-by-step about how to satisfy it, "
+            "identify the required tools, and select the optimal execution route.\n\n"
             "Return ONLY valid JSON:\n"
             "{\n"
-            '  "category": "smalltalk" | "simple_task" | "complex_task",\n'
-            '  "direct_response": "Reply here ONLY if category is smalltalk, otherwise empty string"\n'
-            "}\n"
-            "- smalltalk: greetings, casual chat, thanking, simple questions about yourself.\n"
-            "- simple_task: needs 1-2 tool calls (e.g., check time, read and save a memory, run a single command).\n"
-            "- complex_task: needs research, multiple steps, writing code, comparison, or deep analysis."
+            '  "reasoning": "Your internal thought process on how to handle the request.",\n'
+            '  "route": "direct_chat" | "react_agent" | "hierarchical_swarm",\n'
+            '  "suggested_tools": ["tool_name1", "tool_name2"],\n'
+            '  "direct_response": "Reply here ONLY if route is direct_chat. Otherwise leave empty."\n'
+            "}\n\n"
+            "ROUTE DEFINITIONS:\n"
+            "- direct_chat: Pure smalltalk, greetings, pleasantries. NO tools needed.\n"
+            "- react_agent: Needs 1-3 tool calls. E.g., saving to memory (remember), recalling facts, checking time, simple file read/write, simple commands.\n"
+            "- hierarchical_swarm: Complex tasks needing deep research, multiple parallel steps, coding, or heavy analysis.\n\n"
+            "CRITICAL RULE: If the user states a fact, preference, or asks to remember/recall something, the route MUST BE 'react_agent' and suggested_tools MUST INCLUDE 'remember' or 'recall'."
         )
 
         try:
@@ -123,12 +129,17 @@ class JarvisV20:
                 [{"role": "user", "content": query_en}],
                 system_prompt=system_prompt,
             )
-            if result and "category" in result:
+            if result and "route" in result:
                 return result
         except Exception as e:
-            logger.error("Intent analysis failed: %s", e)
+            logger.error("Master Orchestrator failed: %s", e)
 
-        return {"category": "complex_task", "direct_response": ""}
+        return {
+            "reasoning": "Fallback due to error.",
+            "route": "hierarchical_swarm",
+            "suggested_tools": [],
+            "direct_response": "",
+        }
 
     def process(self, query: str, stream_callback: Callable = None) -> str:
         """
@@ -160,34 +171,44 @@ class JarvisV20:
         # Uložit dotaz do paměti
         self.memory.add_message("user", query)
 
-        # Krok 2: Chytré směrování (Intent Analysis)
-        intent = self._analyze_intent(query_en)
-        category = intent.get("category", "complex_task")
-        logger.info("Query routed as: %s", category.upper())
+        # Krok 2: Kognitivní orchestrace (Executive Cortex)
+        orchestration = self._master_orchestrate(query_en)
+
+        route = orchestration.get("route", "hierarchical_swarm")
+        reasoning = orchestration.get("reasoning", "No reasoning provided.")
+        suggested_tools = orchestration.get("suggested_tools", [])
+
+        # České výpisy pro uživatele
+        logger.info("Mozek - Uvažování: %s", reasoning)
+        logger.info("Vybrana cesta: %s | Nastroje: %s", route.upper(), suggested_tools)
 
         response_en = ""
 
-        # Krok 3: Spuštění na základě kategorie
-        if category == "smalltalk":
-            response_en = intent.get("direct_response", "Hello! How can I help you today?")
-            logger.info("Smalltalk response generated directly")
+        # Krok 3: Spuštění na základě vybrané strategie
+        if route == "direct_chat":
+            response_en = orchestration.get("direct_response", "Hello! How can I help you today?")
+            logger.info("Prima odpoved vygenerovana")
 
-        elif category == "simple_task":
-            logger.info("Using V2 ReAct Loop directly (Skipping Hierarchical Planner)")
-            dummy_plan = Plan(root=PlanningNode(description=query_en))
+        elif route == "react_agent":
+            logger.info("Spoustim Rychleho ReAct Agenta (Preskakuji Hierarchicky Planovac)")
+            from planning.hierarchical_planner import Plan, PlanningNode
+
+            plan_context = f"{query_en}\nOrchestrator strategy: {reasoning}"
+            dummy_plan = Plan(root=PlanningNode(description=plan_context))
+
             response_en = self.reasoning.run(query_en, dummy_plan, stream_callback=None)
 
-        else:  # complex_task
-            logger.info("Triggering Heavy Machinery: Hierarchical Planner + Swarm")
+        else:  # hierarchical_swarm
+            logger.info("Spoustim Tezkejsi mechanismy: Hierarchicky Planovac + Swarm")
             plan = self.planner.create_plan(query_en)
-            logger.info("Plan created: %d nodes", plan.root.get_total_nodes())
+            logger.info("Plan vytvoren: %d uzlu", plan.root.get_total_nodes())
 
             # Monitorování rozhodnutí
             decision_id = self.metacognition.monitor_decision(
                 decision_type="task_planning",
                 decision_context={"query": query_en, "plan_nodes": plan.root.get_total_nodes()},
                 decision_confidence=plan.calculate_confidence(),
-                decision_rationale="Hierarchical decomposition for complex task",
+                decision_rationale=reasoning,
             )
 
             if self.swarm:
