@@ -15,16 +15,14 @@ set "OLLAMA_URL=http://localhost:11434"
 set "GIT_REMOTE_URL=https://github.com/Julek77cz/Jarvis-v20.git"
 
 :: Setup ANSI escape codes (works on Windows 10+)
-:: Use simple method with echo command
-for /F "tokens=1,2 delims=#" %%a in ('"prompt #$H#$E# & echo on & for %%b in (1) do rem"') do set "ESC=%%b"
-set "RESET=%ESC%[0m"
-set "RED=%ESC%[91m"
-set "GREEN=%ESC%[92m"
-set "YELLOW=%ESC%[93m"
-set "BLUE=%ESC%[94m"
-set "MAGENTA=%ESC%[95m"
-set "CYAN=%ESC%[96m"
-set "WHITE=%ESC%[97m"
+set "RESET=[0m"
+set "RED=[91m"
+set "GREEN=[92m"
+set "YELLOW=[93m"
+set "BLUE=[94m"
+set "MAGENTA=[95m"
+set "CYAN=[96m"
+set "WHITE=[97m"
 
 goto :main
 

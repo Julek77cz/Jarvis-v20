@@ -182,7 +182,7 @@ class ReActLoopV2:
     ) -> str:
         """Generate thought with multi-hop awareness."""
         # Rolling buffer for recent thoughts
-        recent_thoughts = "\n".join(f"- {t}" for t in thoughts[-2:])
+        recent_thoughts = "\n".join(f"- {t}" for t in (thoughts or [])[-2:])
 
         # Plan context
         plan_context = ""
