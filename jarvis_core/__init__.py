@@ -70,28 +70,43 @@ class CzechBridgeClient:
     ) -> Optional[Dict]:
         allowed, _ = self.rate_limiter.is_allowed()
         if not allowed:
-            return None
+            return {"error": "rate_limited", "message": "Too many requests"}
+        
         options = options or {}
-        try:
-            import requests
-            import json_repair
+        import requests
+        import json_repair
+        import json
 
-            payload = {
-                "model": MODELS[model_role],
-                "messages": (
-                    [{"role": "system", "content": system_prompt}] + messages
-                    if system_prompt
-                    else messages
-                ),
-                "stream": False,
-                "options": {**HW_OPTIONS, **options},
-            }
-            r = requests.post(OLLAMA_URL, json=payload, timeout=60)
-            if r.status_code == 200:
-                return json_repair.loads(r.json()["message"]["content"])
+        payload = {
+            "model": MODELS[model_role],
+            "messages": (
+                [{"role": "system", "content": system_prompt}] + messages
+                if system_prompt
+                else messages
+            ),
+            "stream": False,
+            "options": {**HW_OPTIONS, **options},
+        }
+        
+        try:
+            response = requests.post(OLLAMA_URL, json=payload, timeout=30)
+            response.raise_for_status()
+            result = response.json()
+            
+            # Parse JSON
+            try:
+                content = result["message"]["content"]
+                return json_repair.loads(content)
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.error("JSON parse error: %s", e)
+                return {"error": "json_parse_error", "message": str(e)}
+                
+        except requests.exceptions.RequestException as e:
+            logger.error("Network error in call_json: %s", e)
+            return {"error": "network_failure", "message": str(e)}
         except Exception as e:
-            logger.debug("call_json failed: %s", e)
-        return None
+            logger.error("Unexpected error in call_json: %s", e)
+            return {"error": "unknown_error", "message": str(e)}
 
     def call_stream(
         self, model_role: str, messages: List[Dict], system_prompt: str = "", callback: Callable = None

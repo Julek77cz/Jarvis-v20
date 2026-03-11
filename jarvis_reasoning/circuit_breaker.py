@@ -6,6 +6,7 @@ failures and opening the circuit when too many consecutive failures occur.
 import hashlib
 import json
 import logging
+import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -62,6 +63,7 @@ class CircuitBreaker:
         self._failure_count = 0
         self._success_count = 0
         self._last_failure_time: Optional[float] = None
+        self._lock = threading.RLock()
         
         # Failure history for detecting repeated failures (immortality feature)
         self._failure_history: List[FailureRecord] = []
@@ -72,7 +74,8 @@ class CircuitBreaker:
         """Get current circuit state."""
         if not self._enabled:
             return CircuitState.CLOSED
-        return self._state
+        with self._lock:
+            return self._state
 
     @property
     def is_open(self) -> bool:
@@ -80,31 +83,33 @@ class CircuitBreaker:
         if not self._enabled:
             return False
 
-        if self._state == CircuitState.OPEN:
-            # Check if timeout has passed to transition to half-open
-            if self._last_failure_time and (time.time() - self._last_failure_time) >= self._timeout:
-                logger.info("Circuit breaker transitioning to HALF_OPEN after timeout")
-                self._state = CircuitState.HALF_OPEN
-                self._success_count = 0
-                return False
-            return True
-        return False
+        with self._lock:
+            if self._state == CircuitState.OPEN:
+                # Check if timeout has passed to transition to half-open
+                if self._last_failure_time and (time.time() - self._last_failure_time) >= self._timeout:
+                    logger.info("Circuit breaker transitioning to HALF_OPEN after timeout")
+                    self._state = CircuitState.HALF_OPEN
+                    self._success_count = 0
+                    return False
+                return True
+            return False
 
     def record_success(self) -> None:
         """Record a successful execution."""
         if not self._enabled:
             return
 
-        if self._state == CircuitState.HALF_OPEN:
-            self._success_count += 1
-            if self._success_count >= self._success_threshold:
-                logger.info("Circuit breaker transitioning to CLOSED after recovery")
-                self._state = CircuitState.CLOSED
+        with self._lock:
+            if self._state == CircuitState.HALF_OPEN:
+                self._success_count += 1
+                if self._success_count >= self._success_threshold:
+                    logger.info("Circuit breaker transitioning to CLOSED after recovery")
+                    self._state = CircuitState.CLOSED
+                    self._failure_count = 0
+                    self._success_count = 0
+            elif self._state == CircuitState.CLOSED:
+                # Reset failure count on success
                 self._failure_count = 0
-                self._success_count = 0
-        elif self._state == CircuitState.CLOSED:
-            # Reset failure count on success
-            self._failure_count = 0
 
     def record_failure(
         self,
@@ -122,42 +127,43 @@ class CircuitBreaker:
         if not self._enabled:
             return
 
-        self._failure_count += 1
-        self._last_failure_time = time.time()
-        
-        # Track failure history for pattern detection
-        if tool and params and error_message:
-            params_hash = hashlib.md5(
-                json.dumps(params, sort_keys=True, default=str).encode()
-            ).hexdigest()[:12]
-            error_hash = hashlib.md5(error_message.encode()).hexdigest()[:12]
+        with self._lock:
+            self._failure_count += 1
+            self._last_failure_time = time.time()
             
-            record = FailureRecord(
-                tool=tool,
-                params_hash=params_hash,
-                error_hash=error_hash,
-            )
-            self._failure_history.append(record)
-            
-            # Trim history if needed
-            if len(self._failure_history) > self._max_history_size:
-                self._failure_history = self._failure_history[-self._max_history_size:]
-            
-            # Check for repeated failures (same tool + params + error)
-            self._check_repeated_failures(tool, params_hash, error_hash, error_message)
-
-        if self._state == CircuitState.HALF_OPEN:
-            # Any failure in half-open state reopens the circuit
-            logger.warning("Circuit breaker reopening after failure in HALF_OPEN state")
-            self._state = CircuitState.OPEN
-            self._success_count = 0
-        elif self._state == CircuitState.CLOSED:
-            if self._failure_count >= self._failure_threshold:
-                logger.warning(
-                    "Circuit breaker opening after %d consecutive failures",
-                    self._failure_count
+            # Track failure history for pattern detection
+            if tool and params and error_message:
+                params_hash = hashlib.md5(
+                    json.dumps(params, sort_keys=True, default=str).encode()
+                ).hexdigest()[:12]
+                error_hash = hashlib.md5(error_message.encode()).hexdigest()[:12]
+                
+                record = FailureRecord(
+                    tool=tool,
+                    params_hash=params_hash,
+                    error_hash=error_hash,
                 )
+                self._failure_history.append(record)
+                
+                # Trim history if needed
+                if len(self._failure_history) > self._max_history_size:
+                    self._failure_history = self._failure_history[-self._max_history_size:]
+                
+                # Check for repeated failures (same tool + params + error)
+                self._check_repeated_failures(tool, params_hash, error_hash, error_message)
+
+            if self._state == CircuitState.HALF_OPEN:
+                # Any failure in half-open state reopens the circuit
+                logger.warning("Circuit breaker reopening after failure in HALF_OPEN state")
                 self._state = CircuitState.OPEN
+                self._success_count = 0
+            elif self._state == CircuitState.CLOSED:
+                if self._failure_count >= self._failure_threshold:
+                    logger.warning(
+                        "Circuit breaker opening after %d consecutive failures",
+                        self._failure_count
+                    )
+                    self._state = CircuitState.OPEN
     
     def _check_repeated_failures(
         self,
@@ -220,41 +226,46 @@ class CircuitBreaker:
 
     def _get_time_since_last_failure(self) -> float:
         """Get seconds since last failure."""
-        if self._last_failure_time:
-            return time.time() - self._last_failure_time
-        return 0.0
+        with self._lock:
+            if self._last_failure_time:
+                return time.time() - self._last_failure_time
+            return 0.0
 
     def get_status(self) -> dict:
         """Get circuit breaker status for debugging."""
-        return {
-            "enabled": self._enabled,
-            "state": self._state.value,
-            "failure_count": self._failure_count,
-            "success_count": self._success_count,
-            "failure_threshold": self._failure_threshold,
-            "success_threshold": self._success_threshold,
-            "timeout_seconds": self._timeout,
-            "time_since_last_failure": self._get_time_since_last_failure(),
-            "failure_history_size": len(self._failure_history),
-        }
+        with self._lock:
+            return {
+                "enabled": self._enabled,
+                "state": self._state.value,
+                "failure_count": self._failure_count,
+                "success_count": self._success_count,
+                "failure_threshold": self._failure_threshold,
+                "success_threshold": self._success_threshold,
+                "timeout_seconds": self._timeout,
+                "time_since_last_failure": self._get_time_since_last_failure(),
+                "failure_history_size": len(self._failure_history),
+            }
 
     @property
     def failure_count(self) -> int:
         """Get current failure count."""
-        return self._failure_count
+        with self._lock:
+            return self._failure_count
 
     @property
     def success_count(self) -> int:
         """Get current success count."""
-        return self._success_count
+        with self._lock:
+            return self._success_count
 
     def reset(self) -> None:
         """Manually reset the circuit breaker to closed state."""
-        logger.info("Circuit breaker manually reset to CLOSED")
-        self._state = CircuitState.CLOSED
-        self._failure_count = 0
-        self._success_count = 0
-        self._last_failure_time = None
+        with self._lock:
+            logger.info("Circuit breaker manually reset to CLOSED")
+            self._state = CircuitState.CLOSED
+            self._failure_count = 0
+            self._success_count = 0
+            self._last_failure_time = None
 
 
 class CircuitBreakerOpenError(Exception):
