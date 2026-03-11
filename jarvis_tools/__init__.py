@@ -257,6 +257,48 @@ def get_tool_param_examples(tool_name: str) -> Dict[str, Any]:
     return examples.get(tool_name, {})
 
 
+# Safe Zones prelude for run_python - patches builtins.open
+SAFE_ZONES_PRELUDE = """
+import builtins as _builtins
+from pathlib import Path as _Path
+
+_USER_HOME = _Path.home()
+_SAFE_ZONES = [
+    _USER_HOME / "Desktop",
+    _USER_HOME / "Downloads",
+    _USER_HOME / "Documents",
+    _Path.cwd().resolve(),
+]
+_DANGEROUS_ZONES = [
+    "c:\\\\windows", "c:\\\\program files", "/etc", "/usr", "/var", "/sys", "/proc", "/boot"
+]
+
+_original_open = _builtins.open
+
+def _safe_open(file, mode='r', *args, **kwargs):
+    try:
+        p = _Path(str(file)).resolve()
+    except Exception:
+        raise PermissionError(f"Blocked: invalid path {file}")
+    p_str = str(p).lower()
+    for danger in _DANGEROUS_ZONES:
+        if danger in p_str:
+            raise PermissionError(f"Blocked: Access denied to system path: {p}")
+    for zone in _SAFE_ZONES:
+        try:
+            if p.is_relative_to(zone):
+                return _original_open(file, mode, *args, **kwargs)
+        except ValueError:
+            pass
+    # Allow read from project dir (cwd)
+    if p.is_relative_to(_Path.cwd().resolve()):
+        return _original_open(file, mode, *args, **kwargs)
+    raise PermissionError(f"Blocked: Access denied. Use Desktop/Downloads/Documents only. Path: {p}")
+
+_builtins.open = _safe_open
+"""
+
+
 def create_tool_class(jarvis_instance):
     def _tool_get_time(params):
         now = datetime.now()
@@ -288,26 +330,40 @@ def create_tool_class(jarvis_instance):
     def _tool_run_command(params):
         cmd = params.get("command", "")
         if not cmd:
-            return f"{Colors.ERROR} Missing command"
-        dangerous = [
-            "rm -rf", "del /", "format", "shutdown", "wget", "curl", "ftp",
-            "chmod", "chown", "mkfs", "dd if=", "> /dev/", "chattr"
+            return f"{Colors.RED}Missing command{Colors.RESET}"
+
+        # ALLOWLIST - only these commands are allowed
+        ALLOWED_COMMANDS = [
+            "dir", "ls", "pwd", "echo", "mkdir", "rmdir",
+            "ipconfig", "ping", "tasklist", "date", "time",
+            "git status", "git log", "git diff",
+            "type", "copy", "move", "ren", "cls", "ver", "hostname",
         ]
-        if any(d in cmd.lower() for d in dangerous):
-            return f"{Colors.ERROR} Blocked"
+
+        cmd_lower = cmd.strip().lower()
+
+        # Check if command starts with any allowed command
+        is_allowed = False
+        for allowed in ALLOWED_COMMANDS:
+            if cmd_lower.startswith(allowed):
+                is_allowed = True
+                break
+
+        if not is_allowed:
+            return (
+                f"{Colors.RED}Blocked: Command not in allowlist. "
+                f"For file operations use read_file/write_file tools. "
+                f"For Python code use run_python tool.{Colors.RESET}"
+            )
+
         try:
             r = subprocess.run(
-                cmd,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=30,
-                encoding="utf-8",
-                errors="replace",
+                cmd, shell=True, capture_output=True,
+                text=True, timeout=30, encoding="utf-8", errors="replace",
             )
-            return r.stdout or r.stderr or f"{Colors.WARNING} No output"
+            return r.stdout or r.stderr or f"{Colors.YELLOW}No output{Colors.RESET}"
         except Exception as e:
-            return f"{Colors.ERROR} {e}"
+            return f"{Colors.RED}Error: {e}{Colors.RESET}"
 
     def _tool_web_search(params):
         q = params.get("query", "")
@@ -565,6 +621,14 @@ def create_tool_class(jarvis_instance):
             r"compile\s*\(",
             r"subprocess\.[a-zA-Z_]+",
             r"socket\.[a-zA-Z_]+",
+            r"Path\s*\(['\"]/",
+            r"Path\s*\(['\"]C:\\\\Win",
+            r"open\s*\(['\"]/",
+            r"open\s*\(['\"]C:\\\\Win",
+            r"os\.system",
+            r"os\.popen",
+            r"subprocess\.call",
+            r"subprocess\.run.*shell\s*=\s*True",
         ]
         for pattern in dangerous_patterns:
             if re.search(pattern, code, re.IGNORECASE):
@@ -582,9 +646,10 @@ def create_tool_class(jarvis_instance):
         script_id = uuid.uuid4().hex[:12]
         script_path = workspace_dir / f"script_{script_id}.py"
 
-        # Write code to temporary file
+        # Write code to temporary file with Safe Zones preambule
         try:
-            script_path.write_text(code, encoding="utf-8")
+            full_code = SAFE_ZONES_PRELUDE + "\n" + code
+            script_path.write_text(full_code, encoding="utf-8")
         except Exception as e:
             return f"{Colors.ERROR} Failed to write script: {e}"
 
