@@ -8,6 +8,7 @@ from jarvis_config import (
     CONTEXT_SUMMARIZER_ENABLED,
     PROCEDURAL_MEMORY_ENABLED,
 )
+from jarvis_core import CzechBridgeClient
 from jarvis_memory import CognitiveMemory
 from jarvis_tools import create_tool_class, TOOLS_SCHEMA
 from planning.hierarchical_planner import HierarchicalPlanner, Plan, PlanningNode
@@ -39,6 +40,10 @@ class JarvisV20:
         logger.info("=" * 60)
         logger.info("JARVIS V20 - State-of-the-Art AI Agent")
         logger.info("=" * 60)
+
+        # Create CzechBridgeClient ONCE (not lazy)
+        self._bridge = CzechBridgeClient()
+        logger.debug("CzechBridgeClient initialized once in __init__")
 
         # Initialize components
         self.streaming = streaming
@@ -98,9 +103,8 @@ class JarvisV20:
         logger.info("-" * 60)
 
     def _get_bridge(self):
-        """Get CzechBridge client (lazy import)."""
-        from jarvis_core import CzechBridgeClient
-        return CzechBridgeClient()
+        """Return the already-created bridge instance."""
+        return self._bridge
 
     def _master_orchestrate(self, query_en: str) -> dict:
         """Kognitivní vrstva (Executive Cortex) pro analýzu a vytvoření strategie zpracování."""
