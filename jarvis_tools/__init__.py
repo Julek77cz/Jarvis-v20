@@ -14,6 +14,42 @@ from pydantic import BaseModel, Field, ValidationError
 
 from jarvis_config import TASKS_FILE
 
+USER_HOME = Path.home()
+SAFE_ZONES = [
+    USER_HOME / "Desktop",
+    USER_HOME / "Downloads",
+    USER_HOME / "Documents",
+    Path.cwd().resolve()  # PROJECT_DIR
+]
+DANGEROUS_ZONES = [
+    "C:\\Windows", "C:\\Program Files", "C:\\Program Files (x86)",
+    "/etc", "/usr/bin", "/usr/local/bin", "/var", "/sys", "/proc", "/boot"
+]
+
+def is_path_safe(target_path: Path) -> bool:
+    """Ověří, zda je cesta v povolené zóně."""
+    try:
+        target_path = target_path.resolve()
+    except:
+        return False
+    
+    target_str = str(target_path).lower()
+    
+    # Check blacklist
+    for danger in DANGEROUS_ZONES:
+        if danger.lower() in target_str:
+            return False
+    
+    # Check whitelist
+    for zone in SAFE_ZONES:
+        try:
+            if target_path.is_relative_to(zone):
+                return True
+        except ValueError:
+            pass
+    
+    return False
+
 logger = logging.getLogger("JARVIS.TOOLS")
 
 
@@ -253,7 +289,10 @@ def create_tool_class(jarvis_instance):
         cmd = params.get("command", "")
         if not cmd:
             return f"{Colors.ERROR} Missing command"
-        dangerous = ["rm -rf", "del /", "format", "shutdown"]
+        dangerous = [
+            "rm -rf", "del /", "format", "shutdown", "wget", "curl", "ftp",
+            "chmod", "chown", "mkfs", "dd if=", "> /dev/", "chattr"
+        ]
         if any(d in cmd.lower() for d in dangerous):
             return f"{Colors.ERROR} Blocked"
         try:
@@ -295,6 +334,8 @@ def create_tool_class(jarvis_instance):
             return f"{Colors.ERROR} Missing file_path"
         try:
             path = Path(fp).resolve()
+            if not is_path_safe(path):
+                return f"{Colors.RED}❌ Blocked: Access denied. You can only manage files in Desktop, Downloads, Documents, or Project dir.{Colors.RESET}"
             with open(path, "w", encoding="utf-8") as f:
                 f.write(content)
             return f"{Colors.SUCCESS} Written {len(content.splitlines())} lines"
@@ -307,6 +348,8 @@ def create_tool_class(jarvis_instance):
             return f"{Colors.ERROR} Missing file_path"
         try:
             path = Path(fp).resolve()
+            if not is_path_safe(path):
+                return f"{Colors.RED}❌ Blocked: Access denied. You can only manage files in Desktop, Downloads, Documents, or Project dir.{Colors.RESET}"
             if not path.exists():
                 return f"{Colors.ERROR} Not found"
             with open(path, "r", encoding="utf-8") as f:
@@ -423,14 +466,16 @@ def create_tool_class(jarvis_instance):
     def _tool_list_dir(params):
         p = params.get("path", ".")
         try:
-            target = Path(p).resolve()
-            if not target.exists():
+            path = Path(p).resolve()
+            if not is_path_safe(path):
+                return f"{Colors.RED}❌ Blocked: Access denied. You can only manage files in Desktop, Downloads, Documents, or Project dir.{Colors.RESET}"
+            if not path.exists():
                 return f"{Colors.ERROR} Not found"
             items = [
                 f"{'📁' if i.is_dir() else '📄'} {i.name}{'' if i.is_dir() else f' ({i.stat().st_size}B)'}"
-                for i in target.iterdir()
+                for i in path.iterdir()
             ]
-            return f"{Colors.INFO} {target}\n" + "\n".join(items) if items else f"{Colors.WARNING} Empty"
+            return f"{Colors.INFO} {path}\n" + "\n".join(items) if items else f"{Colors.WARNING} Empty"
         except Exception as e:
             return f"{Colors.ERROR} {e}"
 
@@ -508,8 +553,6 @@ def create_tool_class(jarvis_instance):
 
         # Security: block dangerous imports and operations
         dangerous_patterns = [
-            r"import\s+os",
-            r"import\s+sys",
             r"import\s+subprocess",
             r"import\s+socket",
             r"import\s+requests",
@@ -520,8 +563,6 @@ def create_tool_class(jarvis_instance):
             r"eval\s*\(",
             r"exec\s*\(",
             r"compile\s*\(",
-            r"os\.[a-zA-Z_]+",
-            r"sys\.[a-zA-Z_]+",
             r"subprocess\.[a-zA-Z_]+",
             r"socket\.[a-zA-Z_]+",
         ]

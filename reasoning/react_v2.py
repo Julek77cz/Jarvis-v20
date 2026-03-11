@@ -278,12 +278,26 @@ Select the best tool. Return JSON: {{"tool": "...", "params": {...}, "parallel":
 
     def _execute_tool(self, tool_name: str, params: Dict) -> str:
         """Execute a single tool."""
+        # Validate parameters first
+        from jarvis_tools import validate_tool_params
+        success, validated = validate_tool_params(tool_name, params)
+        if not success:
+            error_msg = f"❌ Parameter validation error: {validated}"
+            # Record failure
+            if self._circuit_breaker:
+                self._circuit_breaker.record_failure(
+                    tool=tool_name,
+                    params=params,
+                    error_message=f"parameter_error: {validated}"
+                )
+            return error_msg
+        
         tool_fn = self._tools.get(tool_name)
         if not tool_fn:
             return f"❌ Unknown tool: {tool_name}"
 
         try:
-            result = tool_fn(params)
+            result = tool_fn(validated)
             return result if result else "⚠️ No output"
         except Exception as e:
             return f"❌ Error in {tool_name}: {str(e)}"

@@ -132,6 +132,7 @@ class WriteAheadLog:
         self._compression = WAL_COMPRESSION
         
         self._entries: List[WALEntry] = []
+        self._last_flushed_index = 0
         self._current_state: Dict[str, Any] = {}
         self._last_flush = time.time()
         self._entry_counter = 0
@@ -171,6 +172,7 @@ class WriteAheadLog:
                         logger.warning("Invalid WAL entry at line %d, skipping", line_num + 1)
             
             logger.info("Loaded %d valid WAL entries", len(self._entries))
+            self._last_flushed_index = len(self._entries)
             
             # Apply state from WAL to reconstruct current state
             self._reconstruct_state()
@@ -299,6 +301,8 @@ class WriteAheadLog:
                 for entry in self._entries:
                     f.write(entry.to_json() + "\n")
             
+            self._last_flushed_index = len(self._entries)
+            
             logger.info("WAL rotated, archived to %s", archive_path.name)
             
         except Exception as e:
@@ -306,7 +310,7 @@ class WriteAheadLog:
     
     def flush(self) -> int:
         """
-        Flush WAL entries to disk.
+        Flush unflushed entries to disk.
         
         Returns:
             Number of entries flushed
@@ -316,12 +320,21 @@ class WriteAheadLog:
         
         with self._lock:
             try:
+                # Get only unflushed entries
+                unflushed = self._entries[self._last_flushed_index:]
+                if not unflushed:
+                    return 0
+                
                 with open(WAL_FILE, "a", encoding="utf-8") as f:
-                    for entry in self._entries[-50:]:  # Flush last 50 entries
+                    for entry in unflushed:
                         f.write(entry.to_json() + "\n")
                 
                 self._last_flush = time.time()
-                count = len(self._entries)
+                count = len(unflushed)
+                
+                # Update index after successful write
+                self._last_flushed_index = len(self._entries)
+                
                 logger.debug("WAL flushed: %d entries", count)
                 return count
                 
