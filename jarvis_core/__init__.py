@@ -4,6 +4,7 @@ import re
 import threading
 import signal
 import time
+import platform
 from typing import Dict, List, Optional, Tuple, Callable
 from collections import deque
 
@@ -28,6 +29,26 @@ from jarvis_reasoning.swarm import SwarmManager
 
 logger = logging.getLogger("JARVIS.CORE")
 _emergency_stop = threading.Event()
+
+# Apply hardware scaling FIRST
+hw_info = apply_hardware_scaling()
+
+# Update global config with hardware-detected values
+import jarvis_config as _cfg
+_cfg.HW_OPTIONS = hw_info["hw_options"]
+_cfg.SWARM_MAX_AGENTS = hw_info["swarm_max_agents"]
+
+logger.info(
+    f"[HW] CPU=%s | RAM=%d GB | GPU=%s | VRAM=%d GB | "
+    f"model=%s | ctx=%d | agents=%d",
+    platform.processor(),
+    hw_info['ram_gb'],
+    hw_info['gpu_name'],
+    hw_info['vram_gb'],
+    MODELS.get('reasoner', 'unknown'),
+    hw_info['hw_options'].get('num_ctx', 0),
+    hw_info['swarm_max_agents'],
+)
 
 
 def _handle_sigint(sig, frame):
@@ -198,10 +219,10 @@ class CzechBridgeClient:
 class JarvisV19:
     def __init__(self, streaming: bool = True):
         logger.info("Initializing JARVIS V19...")
-        hw_profile, swarm_agents, context_limit = apply_hardware_scaling()
+        # Hardware scaling already applied at module import time
         logger.info(
-            "Hardware detekován: %s. Konfiguruji Swarm na %d agenty a Context limit na %d tokenů.",
-            hw_profile, swarm_agents, context_limit,
+            "Hardware configuration loaded from dynamic.py: %d agents, ctx=%d",
+            SWARM_MAX_AGENTS, HW_OPTIONS.get('num_ctx', 0),
         )
         self.streaming = streaming
         self.bridge = CzechBridgeClient()
@@ -224,10 +245,10 @@ class JarvisV19:
                 bridge=self.bridge,
                 memory=self.memory,
                 tools=self.tools,
-                max_agents=swarm_agents,
+                max_agents=SWARM_MAX_AGENTS,
                 timeout_seconds=SWARM_TIMEOUT_SECONDS,
             )
-            logger.info("Swarm Manager initialized: max_agents=%d", swarm_agents)
+            logger.info("Swarm Manager initialized: max_agents=%d", SWARM_MAX_AGENTS)
 
         logger.info(f"Ready with {len(self.tools)} tools")
 
