@@ -11,7 +11,6 @@ from collections import deque
 from jarvis_config import (
     OLLAMA_URL,
     MODELS,
-    HW_OPTIONS,
     MAX_HISTORY,
     RATE_LIMIT_SECONDS,
     SMALLTALK_PATTERNS,
@@ -21,6 +20,7 @@ from jarvis_config import (
     SWARM_COMPLEXITY_THRESHOLD,
     SWARM_COMPLEXITY_INDICATORS,
 )
+import jarvis_config as _cfg
 from jarvis_config.dynamic import apply_hardware_scaling
 from jarvis_memory import CognitiveMemory
 from jarvis_tools import create_tool_class, TOOLS_SCHEMA, validate_tool_params
@@ -34,7 +34,6 @@ _emergency_stop = threading.Event()
 hw_info = apply_hardware_scaling()
 
 # Update global config with hardware-detected values
-import jarvis_config as _cfg
 _cfg.HW_OPTIONS = hw_info["hw_options"]
 _cfg.SWARM_MAX_AGENTS = hw_info["swarm_max_agents"]
 
@@ -106,7 +105,7 @@ class CzechBridgeClient:
                 else messages
             ),
             "stream": False,
-            "options": {**HW_OPTIONS, **options},
+            "options": {**_cfg.HW_OPTIONS, **options},
         }
         
         try:
@@ -149,7 +148,7 @@ class CzechBridgeClient:
                     else messages
                 ),
                 "stream": True,
-                "options": HW_OPTIONS,
+                "options": _cfg.HW_OPTIONS,
             }
             r = requests.post(OLLAMA_URL, json=payload, stream=True, timeout=60)
             if r.status_code == 200:
@@ -184,7 +183,7 @@ class CzechBridgeClient:
                     {"role": "user", "content": text}
                 ],
                 "stream": False,
-                "options": HW_OPTIONS,
+                "options": _cfg.HW_OPTIONS,
             }
             r = requests.post(OLLAMA_URL, json=payload, timeout=30)
             if r.status_code == 200:
@@ -206,7 +205,7 @@ class CzechBridgeClient:
                     {"role": "user", "content": text}
                 ],
                 "stream": False,
-                "options": HW_OPTIONS,
+                "options": _cfg.HW_OPTIONS,
             }
             r = requests.post(OLLAMA_URL, json=payload, timeout=30)
             if r.status_code == 200:
@@ -222,7 +221,7 @@ class JarvisV19:
         # Hardware scaling already applied at module import time
         logger.info(
             "Hardware configuration loaded from dynamic.py: %d agents, ctx=%d",
-            SWARM_MAX_AGENTS, HW_OPTIONS.get('num_ctx', 0),
+            SWARM_MAX_AGENTS, _cfg.HW_OPTIONS.get('num_ctx', 0),
         )
         self.streaming = streaming
         self.bridge = CzechBridgeClient()
