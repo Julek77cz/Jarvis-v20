@@ -121,6 +121,18 @@ class JarvisV20:
             "CRITICAL RULE: If the user states a fact, preference, or asks to remember/recall something, the route MUST BE 'react_agent' and suggested_tools MUST INCLUDE 'remember' or 'recall'."
         )
 
+        # Fast-path: Check for smalltalk keywords before LLM call
+        query_lower = query_en.lower()
+        for pattern in jarvis_config.SMALLTALK_PATTERNS:
+            if pattern.lower() in query_lower:
+                logger.info("Smalltalk pattern detected: %s", pattern)
+                return {
+                    "reasoning": f"Direct chat - smalltalk keyword detected: {pattern}",
+                    "route": "direct_chat",
+                    "suggested_tools": [],
+                    "direct_response": self._generate_smalltalk_response(query_en),
+                }
+
         try:
             bridge = self._get_bridge()
             result = bridge.call_json(
@@ -135,10 +147,31 @@ class JarvisV20:
 
         return {
             "reasoning": "Fallback due to error.",
-            "route": "hierarchical_swarm",
+            "route": "react_agent",
             "suggested_tools": [],
             "direct_response": "",
         }
+
+    def _generate_smalltalk_response(self, query_en: str) -> str:
+        """Generate a simple response for smalltalk without LLM."""
+        query_lower = query_en.lower()
+
+        if any(p in query_lower for p in ["hello", "hi", "hey", "ahoj", "cau", "zdar"]):
+            return "Hello! I'm JARVIS, your AI assistant. How can I help you today?"
+        elif "how are you" in query_lower or "jak se mas" in query_lower:
+            return "I'm doing great, thank you for asking! Ready to help you with any task."
+        elif "what can you do" in query_lower:
+            return "I can help you with: information retrieval, memory recall, file operations, code generation, web search, system tasks, and much more. Just ask!"
+        elif "who are you" in query_lower:
+            return "I'm JARVIS V20 - an advanced AI assistant with hierarchical planning, metacognition, and multi-agent coordination. I'm here to help you!"
+        elif any(p in query_lower for p in ["thank", "thanks", "diky", "dekuji"]):
+            return "You're welcome! Happy to help. Is there anything else I can do for you?"
+        elif any(p in query_lower for p in ["good morning", "good night"]):
+            return "Thank you! I don't need sleep, but I appreciate the greeting. How can I assist you?"
+        elif "super" in query_lower:
+            return "Indeed! I'm here to help. What would you like to do?"
+
+        return "Hello! How can I help you today?"
 
     def process(self, query: str, stream_callback: Callable = None) -> str:
         """
