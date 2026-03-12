@@ -2,12 +2,7 @@
 import logging
 from typing import Callable, Optional
 
-from jarvis_config import (
-    OLLAMA_URL, MODELS, HW_OPTIONS,
-    SWARM_ENABLED, SWARM_MAX_AGENTS,
-    CONTEXT_SUMMARIZER_ENABLED,
-    PROCEDURAL_MEMORY_ENABLED,
-)
+import jarvis_config
 from jarvis_core import CzechBridgeClient
 from jarvis_memory import CognitiveMemory
 from jarvis_tools import create_tool_class, TOOLS_SCHEMA
@@ -86,16 +81,16 @@ class JarvisV20:
         logger.info("✓ Parallel Tool Executor initialized")
 
         # V20: Swarm V2 (Deterministic)
-        if SWARM_ENABLED:
+        if jarvis_config.SWARM_ENABLED:
             self.swarm = SwarmManagerV2(
                 bridge=self._get_bridge(),
                 memory=self.memory,
                 tools=self.tools,
-                max_agents=SWARM_MAX_AGENTS,
+                max_agents=jarvis_config.SWARM_MAX_AGENTS,
                 timeout_seconds=120,
                 planner=self.planner,  # Use hierarchical planner
             )
-            logger.info(f"✓ Swarm V2 initialized (max_agents={SWARM_MAX_AGENTS})")
+            logger.info(f"✓ Swarm V2 initialized (max_agents={jarvis_config.SWARM_MAX_AGENTS})")
         else:
             self.swarm = None
 
