@@ -346,10 +346,7 @@ Select the best tool. Return JSON: {{"tool": "...", "params": {{...}}, "parallel
     def _should_stop(self, observation: str, iteration: int) -> bool:
         """Determine if reasoning should stop."""
         # Stop conditions - look for FINAL_ANSWER: or TASK_COMPLETE:
-        stop_indicators = [
-            "final_answer:", "task_complete:",
-            "✅", "success", "done", "complete", "answer:", "final:"
-        ]
+        stop_indicators = ["final_answer:", "task_complete:"]
         return any(ind in observation.lower() for ind in stop_indicators)
 
     def _generate_final_answer_v2(
