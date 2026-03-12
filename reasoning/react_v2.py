@@ -1,4 +1,5 @@
 """JARVIS V20 - Enhanced ReAct Loop with Multi-Hop Reasoning"""
+import concurrent.futures
 import logging
 from typing import List, Dict, Any, Callable, Optional
 from dataclasses import dataclass, field
@@ -265,14 +266,34 @@ Select the best tool. Return JSON: {{"tool": "...", "params": {...}, "parallel":
         return {"tool": "recall", "params": {"query": thought[:50]}, "parallel": False, "confidence": 0.5}
 
     def _execute_parallel(self, actions: List[Dict]) -> Dict[str, str]:
-        """Execute multiple tools in parallel."""
-        results = {}
+        """Execute multiple tools in parallel using ThreadPoolExecutor."""
+        if not actions:
+            return {}
 
-        for action in actions:
+        results = {}
+        max_workers = min(len(actions), 4)
+
+        def _run_tool(index: int, action: Dict) -> tuple:
             tool_name = action.get("tool", "")
             params = action.get("params", {})
             result = self._execute_tool(tool_name, params)
-            results[tool_name] = result
+            return index, tool_name, result
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {
+                pool.submit(_run_tool, idx, action): idx
+                for idx, action in enumerate(actions)
+            }
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    idx, tool_name, result = future.result(timeout=60)
+                    results[tool_name] = result
+                except concurrent.futures.TimeoutError:
+                    idx = futures[future]
+                    results[actions[idx].get("tool", "")] = f"Timeout after 60s"
+                except Exception as e:
+                    idx = futures[future]
+                    results[actions[idx].get("tool", "")] = f"Execution error: {str(e)}"
 
         return results
 
