@@ -15,7 +15,6 @@ from jarvis_config import (
     RATE_LIMIT_SECONDS,
     SMALLTALK_PATTERNS,
     SWARM_ENABLED,
-    SWARM_MAX_AGENTS,
     SWARM_TIMEOUT_SECONDS,
     SWARM_COMPLEXITY_THRESHOLD,
     SWARM_COMPLEXITY_INDICATORS,
@@ -253,7 +252,7 @@ class JarvisV19:
         # Hardware scaling already applied at module import time
         logger.info(
             "Hardware configuration loaded from dynamic.py: %d agents, ctx=%d",
-            SWARM_MAX_AGENTS, _cfg.HW_OPTIONS.get('num_ctx', 0),
+            _cfg.SWARM_MAX_AGENTS, _cfg.HW_OPTIONS.get('num_ctx', 0),
         )
         self.streaming = streaming
         self.bridge = CzechBridgeClient()
@@ -276,10 +275,10 @@ class JarvisV19:
                 bridge=self.bridge,
                 memory=self.memory,
                 tools=self.tools,
-                max_agents=SWARM_MAX_AGENTS,
+                max_agents=_cfg.SWARM_MAX_AGENTS,
                 timeout_seconds=SWARM_TIMEOUT_SECONDS,
             )
-            logger.info("Swarm Manager initialized: max_agents=%d", SWARM_MAX_AGENTS)
+            logger.info("Swarm Manager initialized: max_agents=%d", _cfg.SWARM_MAX_AGENTS)
 
         logger.info(f"Ready with {len(self.tools)} tools")
 
