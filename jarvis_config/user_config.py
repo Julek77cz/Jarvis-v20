@@ -12,8 +12,8 @@ def apply_user_config():
     import jarvis_config as _cfg
 
     # Override with user-selected models
-    _cfg.MODELS["planner"] = "llama3.1:8b-instruct-q4_K_M"
-    _cfg.MODELS["verifier"] = "llama3.1:8b-instruct-q4_K_M"
-    _cfg.MODELS["reasoner"] = "llama3.1:8b-instruct-q4_K_M"
+    _cfg.MODELS["planner"] = "qwen2.5-coder:7b-instruct-q4_K_M"
+    _cfg.MODELS["verifier"] = "qwen2.5-coder:7b-instruct-q4_K_M"
+    _cfg.MODELS["reasoner"] = "qwen2.5-coder:7b-instruct-q4_K_M"
 
     # Note: MODELS["czech_gateway"] should remain as jobautomation/OpenEuroLLM-Czech:latest
