@@ -82,8 +82,12 @@ class RateLimiter:
 
 
 class CzechBridgeClient:
+    MAX_CACHE_SIZE = 200
+
     def __init__(self):
         self.rate_limiter = RateLimiter()
+        self._translation_cache = {}
+        self._cache_order = []
 
     def call_json(
         self, model_role: str, messages: List[Dict], system_prompt: str = "", options: Dict = None
@@ -172,9 +176,17 @@ class CzechBridgeClient:
 
     def translate_to_en(self, text: str) -> str:
         """Translate Czech text to English using czech_gateway model."""
+        cache_key = hash(text + "_en")
+
+        if cache_key in self._translation_cache:
+            logger.debug("[CACHE] Translation hit")
+            self._cache_order.remove(cache_key)
+            self._cache_order.append(cache_key)
+            return self._translation_cache[cache_key]
+
         try:
             import requests
-            
+
             system_prompt = "You are a translator. Translate the following Czech text to English. Return ONLY the translation, nothing else."
             payload = {
                 "model": MODELS["czech_gateway"],
@@ -187,16 +199,30 @@ class CzechBridgeClient:
             }
             r = requests.post(OLLAMA_URL, json=payload, timeout=30)
             if r.status_code == 200:
-                return str(r.json()["message"]["content"]).strip()
+                result = str(r.json()["message"]["content"]).strip()
+                self._translation_cache[cache_key] = result
+                self._cache_order.append(cache_key)
+                if len(self._cache_order) > self.MAX_CACHE_SIZE:
+                    oldest_key = self._cache_order.pop(0)
+                    del self._translation_cache[oldest_key]
+                return result
         except Exception as e:
             logger.debug("translate_to_en failed: %s", e)
         return text
 
     def translate_to_cz(self, text: str) -> str:
         """Translate English text to Czech using czech_gateway model."""
+        cache_key = hash(text + "_cz")
+
+        if cache_key in self._translation_cache:
+            logger.debug("[CACHE] Translation hit")
+            self._cache_order.remove(cache_key)
+            self._cache_order.append(cache_key)
+            return self._translation_cache[cache_key]
+
         try:
             import requests
-            
+
             system_prompt = "You are a translator. Translate the following English text to Czech. Return ONLY the translation, nothing else."
             payload = {
                 "model": MODELS["czech_gateway"],
@@ -209,7 +235,13 @@ class CzechBridgeClient:
             }
             r = requests.post(OLLAMA_URL, json=payload, timeout=30)
             if r.status_code == 200:
-                return str(r.json()["message"]["content"]).strip()
+                result = str(r.json()["message"]["content"]).strip()
+                self._translation_cache[cache_key] = result
+                self._cache_order.append(cache_key)
+                if len(self._cache_order) > self.MAX_CACHE_SIZE:
+                    oldest_key = self._cache_order.pop(0)
+                    del self._translation_cache[oldest_key]
+                return result
         except Exception as e:
             logger.debug("translate_to_cz failed: %s", e)
         return text
