@@ -201,12 +201,8 @@ class HierarchicalPlanner:
     def _should_stop_decomposition(self, node: PlanningNode, depth: int) -> bool:
         """Determine if decomposition should stop for this node."""
         # Stop if description is simple enough - use word boundary matching
-        simple_indicators = [
-            r"\bget\b", r"\bfetch\b", r"\bretrieve\b", r"\bread\b", r"\bwrite\b",
-            r"\bopen\b", r"\bclose\b", r"\bstart\b", r"\bstop\b", r"\bcall\b",
-        ]
-        desc_lower = node.description.lower()
-        if any(re.search(ind, desc_lower) for ind in simple_indicators):
+        simple_indicators = ["get_time", "system_info", "recall", "remember", "forget"]
+        if len(node.description.split()) <= 4:
             return True
 
         # Stop if max depth reached
