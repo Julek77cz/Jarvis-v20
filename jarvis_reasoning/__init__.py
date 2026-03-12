@@ -10,12 +10,13 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from jarvis_config import (
-    MODELS, HW_OPTIONS, OLLAMA_URL, REACTION_MAX_ITERATIONS,
+    MODELS, OLLAMA_URL, REACTION_MAX_ITERATIONS,
     CONTEXT_SUMMARIZER_ENABLED, CONTEXT_SOFT_LIMIT_TOKENS,
     CONTEXT_MEDIUM_LIMIT_TOKENS, CONTEXT_HARD_LIMIT_TOKENS,
     CONTEXT_MAX_OBSERVATIONS, CONTEXT_MAX_RECENT_TURNS,
     CONTEXT_ENABLE_LLM_SUMMARIZATION,
 )
+import jarvis_config as _cfg
 from jarvis_reasoning.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerOpenError,
@@ -253,7 +254,7 @@ class Verifier:
                     {"role": "user", "content": prompt}
                 ],
                 "stream": False,
-                "options": HW_OPTIONS,
+                "options": _cfg.HW_OPTIONS,
             }
 
             response = requests.post(OLLAMA_URL, json=payload, timeout=30)
