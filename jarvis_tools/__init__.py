@@ -310,7 +310,7 @@ def create_tool_class(jarvis_instance):
             return f"{Colors.ERROR} Missing app_name"
         try:
             subprocess.Popen([app] if os.name != "nt" else ["start", "", app], shell=os.name == "nt")
-            return f"{Colors.SUCCESS} Opened: {app}"
+            return f"✔ Opened: {app}"
         except Exception as e:
             return f"{Colors.ERROR} {e}"
 
@@ -323,7 +323,7 @@ def create_tool_class(jarvis_instance):
                 ["pkill", "-f", app] if os.name != "nt" else ["taskkill", "/F", "/IM", f"{app}.exe"],
                 capture_output=True,
             )
-            return f"{Colors.SUCCESS} Closed: {app}"
+            return f"✔ Closed: {app}"
         except Exception as e:
             return f"{Colors.ERROR} {e}"
 
@@ -394,7 +394,7 @@ def create_tool_class(jarvis_instance):
                 return f"{Colors.RED}❌ Blocked: Access denied. You can only manage files in Desktop, Downloads, Documents, or Project dir.{Colors.RESET}"
             with open(path, "w", encoding="utf-8") as f:
                 f.write(content)
-            return f"{Colors.SUCCESS} Written {len(content.splitlines())} lines"
+            return f"✔ Written {len(content.splitlines())} lines"
         except Exception as e:
             return f"{Colors.ERROR} {e}"
 
@@ -486,9 +486,9 @@ def create_tool_class(jarvis_instance):
             )
             
             if fact and hasattr(fact, 'id'):
-                return f"{Colors.SUCCESS} Remembered [{fact.id}]: {content[:100]}{'...' if len(content) > 100 else ''}"
+                return f"✔ Remembered [{fact.id}]: {content[:100]}{'...' if len(content) > 100 else ''}"
             else:
-                return f"{Colors.SUCCESS} Remembered: {content[:100]}{'...' if len(content) > 100 else ''}"
+                return f"✔ Remembered: {content[:100]}{'...' if len(content) > 100 else ''}"
                 
         except Exception as e:
             logger.exception("Remember tool failed")
@@ -511,7 +511,7 @@ def create_tool_class(jarvis_instance):
             removed = jarvis_instance.memory.forget(fact_id)
             
             if removed:
-                return f"{Colors.SUCCESS} Forgotten [{fact_id}]"
+                return f"✔ Forgotten [{fact_id}]"
             else:
                 return f"{Colors.WARNING} Memory [{fact_id}] not found. It may have already been deleted or the ID is incorrect."
                 
@@ -571,7 +571,7 @@ def create_tool_class(jarvis_instance):
                     json.dump(tasks, f, ensure_ascii=False, indent=2)
             except Exception as e:
                 return f"{Colors.ERROR} Save failed: {e}"
-            return f"{Colors.SUCCESS} Task added [{task['id']}]: {desc}"
+            return f"✔ Task added [{task['id']}]: {desc}"
 
         elif action == "list":
             open_tasks = [t for t in tasks if not t.get("completed")]
@@ -594,7 +594,7 @@ def create_tool_class(jarvis_instance):
                         json.dump(tasks, f, ensure_ascii=False, indent=2)
                 except:
                     pass
-                return f"{Colors.SUCCESS} Task [{tid}] removed"
+                return f"✔ Task [{tid}] removed"
             return f"{Colors.ERROR} Task [{tid}] not found"
 
         return f"{Colors.ERROR} Unknown action: {action}"

@@ -8,6 +8,7 @@ Implements a hierarchical planner that can:
 - Prune branches based on heuristics
 """
 import logging
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -199,12 +200,13 @@ class HierarchicalPlanner:
 
     def _should_stop_decomposition(self, node: PlanningNode, depth: int) -> bool:
         """Determine if decomposition should stop for this node."""
-        # Stop if description is simple enough
+        # Stop if description is simple enough - use word boundary matching
         simple_indicators = [
-            "get", "fetch", "retrieve", "read", "write",
-            "open", "close", "start", "stop", "call",
+            r"\bget\b", r"\bfetch\b", r"\bretrieve\b", r"\bread\b", r"\bwrite\b",
+            r"\bopen\b", r"\bclose\b", r"\bstart\b", r"\bstop\b", r"\bcall\b",
         ]
-        if any(ind in node.description.lower() for ind in simple_indicators):
+        desc_lower = node.description.lower()
+        if any(re.search(ind, desc_lower) for ind in simple_indicators):
             return True
 
         # Stop if max depth reached
