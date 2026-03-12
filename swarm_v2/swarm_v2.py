@@ -112,26 +112,21 @@ class SwarmManagerV2:
         start_time = time.time()
 
         try:
-            prompt = f"""Execute this task and return a structured response.
-
-Task: {subtask.description}
-
-Return a JSON object with:
-{{
-    "result": "your detailed response",
-    "success": true
-}}"""
+            system_message = "You are a research assistant. Execute tasks precisely and provide detailed, accurate responses."
 
             response = bridge.call_json(
-                prompt=prompt,
-                system_message="You are a helpful assistant. Execute tasks precisely and return structured JSON responses.",
-                temperature=0.3
+                "reasoner",
+                [{"role": "user", "content": subtask.description}],
+                system_prompt=system_message,
+                options={"temperature": 0.3}
             )
 
             duration = time.time() - start_time
 
-            if isinstance(response, dict) and "result" in response:
-                result = response["result"]
+            if isinstance(response, dict):
+                if "error" in response:
+                    raise Exception(response.get("message", "Unknown error"))
+                result = response.get("content", str(response))
             else:
                 result = str(response)
 
@@ -166,34 +161,22 @@ Return a JSON object with:
             for i, result in enumerate(results)
         )
 
-        # Use LLM to synthesize coherent response
-        synthesis_prompt = f"""Synthesize the following subtask results into a coherent, comprehensive response.
+        system_message = "You are a synthesis expert. Combine multiple results into a coherent, well-structured response. Provide a unified response that combines relevant information from all results, eliminates redundancy, and maintains logical flow."
 
-Subtask Results:
-{results_text}
-
-Provide a unified response that:
-1. Combines relevant information from all results
-2. Eliminates redundancy
-3. Maintains logical flow
-4. Addresses the original task comprehensively
-
-Return a JSON object with:
-{{
-    "synthesized_response": "your unified coherent response"
-}}"""
+        synthesis_prompt = f"Synthesize the following subtask results into a coherent, comprehensive response.\n\nSubtask Results:\n{results_text}"
 
         try:
             response = self._bridge.call_json(
-                prompt=synthesis_prompt,
-                system_message="You are a synthesis expert. Combine multiple results into a coherent, well-structured response.",
-                temperature=0.3
+                "reasoner",
+                [{"role": "user", "content": synthesis_prompt}],
+                system_prompt=system_message,
+                options={"temperature": 0.3}
             )
 
-            if isinstance(response, dict) and "synthesized_response" in response:
-                return response["synthesized_response"]
-            elif isinstance(response, dict) and "result" in response:
-                return response["result"]
+            if isinstance(response, dict):
+                if "error" in response:
+                    raise Exception(response.get("message", "Unknown error"))
+                return response.get("content", str(response))
             else:
                 return str(response)
 
