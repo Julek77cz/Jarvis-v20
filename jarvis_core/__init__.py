@@ -51,7 +51,7 @@ def check_stop():
 
 
 class RateLimiter:
-    def __init__(self, max_requests=10, window_seconds=60):
+    def __init__(self, max_requests=100, window_seconds=60):
         self.max_requests = max_requests
         self.window = window_seconds
         self.requests = deque()

@@ -245,11 +245,31 @@ Think step-by-step. Consider:
             {"thought": thought, "observations": observations},
         ) if self._metacognition else None
 
+        # Complete list of available tools
+        tools_list = """Available tools:
+  - get_time: Get current time (no params)
+  - open_app: Open an application (app_name)
+  - close_app: Close an application (app_name)
+  - run_command: Run a shell command (command)
+  - web_search: Search the web (query)
+  - write_file: Write to a file (file_path, content)
+  - read_file: Read a file (file_path)
+  - recall: Search memory (query)
+  - remember: Store in memory (content, fact_type, confidence)
+  - forget: Remove from memory (fact_id)
+  - list_dir: List directory contents (path)
+  - system_info: Get system information (no params)
+  - manage_tasks: Manage tasks (action, task_description, task_id)
+  - run_python: Execute Python code (code, timeout)"""
+
         prompt = f"""Thought: {thought}
 Observations: {observations[-1][:200] if observations else "None"}
+Calibrated confidence: {calibrated_confidence:.2f}
 {'Suggestion from metacognition: ' + suggestion if suggestion else 'None'}
 
-Select the best tool. Return JSON: {{"tool": "...", "params": {...}, "parallel": true/false, "confidence": 0.0-1.0}}"""
+{tools_list}
+
+Select the best tool. Return JSON: {{"tool": "...", "params": {{...}}, "parallel": true/false, "confidence": 0.0-1.0}}"""
 
         try:
             result = self._bridge.call_json(
@@ -325,8 +345,11 @@ Select the best tool. Return JSON: {{"tool": "...", "params": {...}, "parallel":
 
     def _should_stop(self, observation: str, iteration: int) -> bool:
         """Determine if reasoning should stop."""
-        # Stop conditions
-        stop_indicators = ["✅", "success", "done", "complete", "answer:", "final:"]
+        # Stop conditions - look for FINAL_ANSWER: or TASK_COMPLETE:
+        stop_indicators = [
+            "final_answer:", "task_complete:",
+            "✅", "success", "done", "complete", "answer:", "final:"
+        ]
         return any(ind in observation.lower() for ind in stop_indicators)
 
     def _generate_final_answer_v2(

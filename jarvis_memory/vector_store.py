@@ -65,33 +65,70 @@ class ChromaCollection:
             return False
 
     def search(self, query: str, k: int = 5, where: Optional[Dict] = None) -> List[Dict]:
+        # First try vector search
         embedding = self._embeddings.get(query)
-        if embedding is None or not self._available():
-            return []
+        if embedding is not None and self._available():
+            try:
+                kwargs: Dict[str, Any] = {
+                    "query_embeddings": [embedding],
+                    "n_results": min(k, max(1, self._collection.count())),
+                    "include": ["documents", "metadatas", "distances"],
+                }
+                if where:
+                    kwargs["where"] = where
+                result = self._collection.query(**kwargs)
+                out = []
+                for idx, doc_id in enumerate(result["ids"][0]):
+                    distance = result["distances"][0][idx]
+                    score = 1.0 - distance
+                    out.append(
+                        {
+                            "id": doc_id,
+                            "text": result["documents"][0][idx],
+                            "metadata": result["metadatas"][0][idx],
+                            "score": score,
+                        }
+                    )
+                return out
+            except Exception as e:
+                logger.warning("ChromaDB search failed: %s", e)
+        
+        # Fallback to keyword search if vector search fails
+        return self._keyword_search(query, k, where)
+    
+    def _keyword_search(self, query: str, k: int = 5, where: Optional[Dict] = None) -> List[Dict]:
+        """Keyword-based fallback search when vector search is unavailable."""
         try:
-            kwargs: Dict[str, Any] = {
-                "query_embeddings": [embedding],
-                "n_results": min(k, max(1, self._collection.count())),
-                "include": ["documents", "metadatas", "distances"],
-            }
-            if where:
-                kwargs["where"] = where
-            result = self._collection.query(**kwargs)
-            out = []
-            for idx, doc_id in enumerate(result["ids"][0]):
-                distance = result["distances"][0][idx]
-                score = 1.0 - distance
-                out.append(
-                    {
+            if not self._available():
+                return []
+            
+            # Get all documents and filter by keyword match
+            query_lower = query.lower()
+            query_words = set(query_lower.split())
+            
+            result = self._collection.get(include=["documents", "metadatas"])
+            
+            matches = []
+            for idx, doc_id in enumerate(result["ids"]):
+                doc_text = result["documents"][idx].lower()
+                
+                # Check if any query word appears in document
+                word_matches = sum(1 for w in query_words if w in doc_text)
+                if word_matches > 0:
+                    score = word_matches / len(query_words)  # Normalize score
+                    matches.append({
                         "id": doc_id,
-                        "text": result["documents"][0][idx],
-                        "metadata": result["metadatas"][0][idx],
+                        "text": result["documents"][idx],
+                        "metadata": result["metadatas"][idx],
                         "score": score,
-                    }
-                )
-            return out
+                    })
+            
+            # Sort by score descending and limit to k results
+            matches.sort(key=lambda x: x["score"], reverse=True)
+            return matches[:k]
+            
         except Exception as e:
-            logger.warning("ChromaDB search failed: %s", e)
+            logger.warning("Keyword search failed: %s", e)
             return []
 
     def delete(self, id: str) -> bool:

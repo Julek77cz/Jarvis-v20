@@ -189,16 +189,47 @@ class ConsolidationScheduler:
             words = fact.content.split()
             if len(words) < 3:
                 continue
-            try:
-                self._memory.kg.add_entity(
-                    name=fact.content[:80],
-                    entity_type="concept",
-                    attributes={"source": fact.source, "confidence": fact.confidence},
-                )
-                added += 1
-            except Exception:
-                pass
+            
+            # Use LLM to extract entities from fact content
+            entities = self._extract_entities_with_llm(fact.content)
+            
+            for entity_name, entity_type in entities:
+                try:
+                    self._memory.kg.add_entity(
+                        name=entity_name,
+                        entity_type=entity_type,
+                        attributes={"source": fact.source, "confidence": fact.confidence},
+                    )
+                    added += 1
+                except Exception:
+                    pass
         return added
+    
+    def _extract_entities_with_llm(self, content: str) -> List[tuple]:
+        """Extract entities from fact content using LLM."""
+        prompt = f"""Extract 1-3 key entities from this fact: "{content}"
+
+Return ONLY valid JSON:
+{{"entities": [{{"name": "entity name", "type": "person|place|concept|preference"}}]}}"""
+        
+        try:
+            result = _call_llm(prompt)
+            if result and isinstance(result.get("entities"), list):
+                entities = []
+                for e in result["entities"]:
+                    name = e.get("name", "").strip()
+                    entity_type = e.get("type", "concept")
+                    if name and len(name) < 80:
+                        entities.append((name, entity_type))
+                return entities
+        except Exception as e:
+            logger.debug("Entity extraction failed: %s", e)
+        
+        # Fallback to simple extraction if LLM fails
+        words = content.split()
+        if len(words) >= 3:
+            return [(content[:80], "concept")]
+        return []
 
     def start(self) -> None:
         if self._running:
