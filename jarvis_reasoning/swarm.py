@@ -9,7 +9,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Set, TYPE_CHECKING
 
-from jarvis_config import MODELS, HW_OPTIONS
+import jarvis_config as _cfg
 
 if TYPE_CHECKING:
     from jarvis_core import CzechBridgeClient

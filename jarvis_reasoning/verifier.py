@@ -3,7 +3,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, TYPE_CHECKING
 
-from jarvis_config import MODELS, HW_OPTIONS, OLLAMA_URL, SIMPLE_TOOLS
+import jarvis_config as _cfg
+from jarvis_config import OLLAMA_URL, SIMPLE_TOOLS
 
 if TYPE_CHECKING:
     from jarvis_core import CzechBridgeClient
