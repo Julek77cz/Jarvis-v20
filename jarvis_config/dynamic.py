@@ -4,6 +4,8 @@ import platform
 
 logger = logging.getLogger("JARVIS.CONFIG.DYNAMIC")
 
+DEFAULT_PLANNER_MODEL = "qwen2.5:3b-instruct"
+
 
 def apply_hardware_scaling():
     """Apply hardware-specific scaling based on detected VRAM and RAM."""
@@ -67,31 +69,28 @@ def apply_hardware_scaling():
     
     # ===== MODEL SELECTION =====
     try:
-        import os
         import jarvis_config as _cfg
-        user_config_path = os.path.join(os.path.dirname(__file__), "user_config.py")
-        # Check if user already has custom models (skip if override exists)
-        if os.path.exists(user_config_path):
-            with open(user_config_path, 'r') as f:
-                content = f.read()
-                if 'MODELS' in content and 'apply_user_config' in content:
-                    print("[HW] User has custom model config, skipping auto-selection")
-                else:
-                    # Auto-select model based on VRAM
-                    if vram_gb < 4 or vram_gb == 0:
-                        selected_model = "qwen2.5:3b-instruct"
-                    elif vram_gb < 8:
-                        selected_model = "qwen2.5:3b-instruct"
-                    elif vram_gb < 16:
-                        selected_model = "qwen2.5:7b-instruct-q4_K_M"
-                    else:
-                        selected_model = "qwen2.5:14b-instruct-q4_K_M"
-                    
-                    # Apply to MODELS (planner/verifier/reasoner)
-                    _cfg.MODELS["planner"] = selected_model
-                    _cfg.MODELS["verifier"] = selected_model
-                    _cfg.MODELS["reasoner"] = selected_model
-    except:
+        # Skip auto-selection if the user has manually changed the planner model
+        # from its default value (apply_user_config already ran before this function)
+        if _cfg.MODELS["planner"] != DEFAULT_PLANNER_MODEL:
+            logger.info("[HW] User has custom model config (%s), skipping auto-selection", _cfg.MODELS["planner"])
+        else:
+            # Auto-select model based on VRAM
+            if vram_gb < 4 or vram_gb == 0:
+                selected_model = "qwen2.5:3b-instruct"
+            elif vram_gb < 8:
+                selected_model = "qwen2.5:3b-instruct"
+            elif vram_gb < 16:
+                selected_model = "qwen2.5:7b-instruct-q4_K_M"
+            else:
+                selected_model = "qwen2.5:14b-instruct-q4_K_M"
+
+            # Apply to MODELS (planner/verifier/reasoner)
+            _cfg.MODELS["planner"] = selected_model
+            _cfg.MODELS["verifier"] = selected_model
+            _cfg.MODELS["reasoner"] = selected_model
+            logger.info("[HW] Auto-selected model %s (VRAM=%d GB)", selected_model, vram_gb)
+    except Exception:
         pass
     
     # ===== DYNAMIC HW_OPTIONS =====
