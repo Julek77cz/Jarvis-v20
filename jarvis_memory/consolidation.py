@@ -6,7 +6,8 @@ import time
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, List, Optional
 
-from jarvis_config import CONSOLIDATION_IDLE_MINUTES, CONSOLIDATION_HOUR, OLLAMA_URL, MODELS, HW_OPTIONS
+from jarvis_config import CONSOLIDATION_IDLE_MINUTES, CONSOLIDATION_HOUR, OLLAMA_URL, MODELS
+import jarvis_config as _cfg
 
 if TYPE_CHECKING:
     from jarvis_memory.memory_manager import CognitiveMemory
@@ -28,7 +29,7 @@ def _call_llm(prompt: str) -> Optional[dict]:
             "model": MODELS["planner"],
             "messages": [{"role": "user", "content": prompt}],
             "stream": False,
-            "options": {**HW_OPTIONS, "temperature": 0.2},
+            "options": {**_cfg.HW_OPTIONS, "temperature": 0.2},
         }
         r = requests.post(OLLAMA_URL, json=payload, timeout=90)
         if r.status_code == 200:
