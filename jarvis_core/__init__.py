@@ -185,7 +185,7 @@ class CzechBridgeClient:
                 "stream": False,
                 "options": _cfg.HW_OPTIONS,
             }
-            r = requests.post(OLLAMA_URL, json=payload, timeout=30)
+            r = requests.post(OLLAMA_URL, json=payload)
             if r.status_code == 200:
                 result = str(r.json()["message"]["content"]).strip()
                 self._translation_cache[cache_key] = result
@@ -221,7 +221,7 @@ class CzechBridgeClient:
                 "stream": False,
                 "options": _cfg.HW_OPTIONS,
             }
-            r = requests.post(OLLAMA_URL, json=payload, timeout=30)
+            r = requests.post(OLLAMA_URL, json=payload)
             if r.status_code == 200:
                 result = str(r.json()["message"]["content"]).strip()
                 self._translation_cache[cache_key] = result
